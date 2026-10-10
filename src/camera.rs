@@ -4,10 +4,13 @@ pub const PLAYER_HEIGHT: f32 = 1.8;
 pub const PLAYER_RADIUS: f32 = 0.32;
 const WALK_SPEED: f32 = 5.5;
 const RUN_SPEED: f32 = 8.5;
-const ACCELERATION: f32 = 50.0;
-const FRICTION: f32 = 20.0;
+const ACCELERATION: f32 = 12.0;
+const FRICTION: f32 = 10.0;
 const GRAVITY: f32 = 22.0;
 const JUMP_SPEED: f32 = 8.0;
+const BASE_FOV: f32 = 90.0;
+const RUN_FOV_BONUS: f32 = 12.0;
+const CAMERA_FOLLOW_RATE: f32 = 24.0;
 
 // Stride rate in phase radians per second. Lower values make the head bob and
 // the held-model sway slower and smoother.
@@ -26,6 +29,7 @@ const VIEWMODEL_UP: f32 = -0.19;
 const VIEWMODEL_FORWARD: f32 = 0.45;
 
 pub struct Camera {
+    /// Collision/physics position (the player's feet).
     pub position: Vec3,
     pub yaw: f32,
     pub pitch: f32,
@@ -33,19 +37,77 @@ pub struct Camera {
     pub on_ground: bool,
     pub bob_phase: f32,
     pub bob_amount: f32,
+    visual_position: Vec3,
+    air_yaw: f32,
+    run_amount: f32,
+    run_from: f32,
+    run_target: f32,
+    run_elapsed: f32,
+    running: bool,
 }
 
 impl Camera {
     pub fn new() -> Self {
+        let position = Vec3::new(0.0, 0.0, 10.0);
         Self {
-            position: Vec3::new(0.0, 0.0, 10.0),
+            position,
             yaw: -std::f32::consts::FRAC_PI_2,
             pitch: 0.0,
             velocity: Vec3::ZERO,
             on_ground: true,
             bob_phase: 0.0,
             bob_amount: 0.0,
+            visual_position: position,
+            air_yaw: -std::f32::consts::FRAC_PI_2,
+            run_amount: 0.0,
+            run_from: 0.0,
+            run_target: 0.0,
+            run_elapsed: 0.0,
+            running: false,
         }
+    }
+
+    pub fn apply_mouse_motion(&mut self, dx: f64, dy: f64, sensitivity: f32) {
+        let scale = 0.002 * sensitivity.clamp(0.1, 3.0);
+        // Keep aiming immediate for precise shooter controls. Camera position,
+        // head bob and held-model motion remain eased independently.
+        self.yaw += dx as f32 * scale;
+        self.pitch = (self.pitch - dy as f32 * scale).clamp(-1.54, 1.54);
+    }
+
+    pub fn reset_air_yaw(&mut self) {
+        self.air_yaw = self.yaw;
+    }
+
+    pub fn steer_air_momentum_with_yaw(&mut self) {
+        let yaw_delta = angle_delta(self.air_yaw, self.yaw);
+        self.air_yaw = self.yaw;
+
+        // Rotate existing horizontal momentum with the look direction, but do
+        // not add air acceleration from WASD or sprint.
+        let (sin, cos) = yaw_delta.sin_cos();
+        let x = self.velocity.x;
+        let z = self.velocity.z;
+        self.velocity.x = cos * x - sin * z;
+        self.velocity.z = sin * x + cos * z;
+    }
+
+    pub fn set_running(&mut self, running: bool) {
+        if self.running == running {
+            return;
+        }
+        self.running = running;
+        self.run_from = self.run_amount;
+        self.run_target = if running { 1.0 } else { 0.0 };
+        self.run_elapsed = 0.0;
+    }
+
+    pub fn render_position(&self) -> Vec3 {
+        self.visual_position
+    }
+
+    pub fn fov_degrees(&self) -> f32 {
+        BASE_FOV + RUN_FOV_BONUS * self.run_amount
     }
 
     pub fn forward(&self) -> Vec3 {
@@ -64,14 +126,10 @@ impl Camera {
     }
 
     pub fn view_projection(&self, aspect: f32) -> Mat4 {
-        let bob = if self.on_ground {
-            self.bob_amount * (self.bob_phase * 2.0).sin() * CAMERA_BOB
-        } else {
-            0.0
-        };
-        let eye = self.position + Vec3::Y * (1.62 + bob);
+        let bob = self.bob_amount * (self.bob_phase * 2.0).sin() * CAMERA_BOB;
+        let eye = self.visual_position + Vec3::Y * (1.62 + bob);
         let forward = self.forward();
-        Mat4::perspective_rh(90.0_f32.to_radians(), aspect, 0.1, 120.0)
+        Mat4::perspective_rh(self.fov_degrees().to_radians(), aspect, 0.1, 120.0)
             * Mat4::look_at_rh(eye, eye + forward, Vec3::Y)
     }
 
@@ -79,17 +137,13 @@ impl Camera {
         let forward = self.forward();
         let right = self.right();
         let up = right.cross(forward).normalize();
-        let speed = Vec3::new(self.velocity.x, 0.0, self.velocity.z).length();
-        let run = speed > WALK_SPEED + 0.5;
-        let bob = if self.on_ground { self.bob_amount } else { 0.0 };
-        let (sway_x, sway_y) = if run {
-            (VIEW_SWAY_X.1, VIEW_SWAY_Y.1)
-        } else {
-            (VIEW_SWAY_X.0, VIEW_SWAY_Y.0)
-        };
+        // bob_amount eases toward zero in the air instead of snapping on takeoff.
+        let bob = self.bob_amount;
+        let sway_x = VIEW_SWAY_X.0 + (VIEW_SWAY_X.1 - VIEW_SWAY_X.0) * self.run_amount;
+        let sway_y = VIEW_SWAY_Y.0 + (VIEW_SWAY_Y.1 - VIEW_SWAY_Y.0) * self.run_amount;
         let x_sway = self.bob_phase.sin() * bob * sway_x;
         let y_sway = (self.bob_phase * 2.0).cos().abs() * bob * sway_y;
-        let origin = self.position
+        let origin = self.visual_position
             + Vec3::Y * 1.62
             + right * (VIEWMODEL_RIGHT + x_sway)
             + up * (VIEWMODEL_UP - y_sway)
@@ -103,22 +157,44 @@ impl Camera {
     }
 
     pub fn animate(&mut self, dt: f32) {
+        let dt = dt.max(0.0);
+        let follow_alpha = 1.0 - (-CAMERA_FOLLOW_RATE * dt).exp();
+        self.visual_position = self.visual_position.lerp(self.position, follow_alpha);
+
+        if self.run_amount != self.run_target {
+            self.run_elapsed += dt;
+            let duration = if self.run_target > self.run_from {
+                0.42
+            } else {
+                0.28
+            };
+            let t = (self.run_elapsed / duration).clamp(0.0, 1.0);
+            // Ease-in while entering a sprint, ease-out when leaving it.
+            let eased = if self.run_target > self.run_from {
+                t * t
+            } else {
+                1.0 - (1.0 - t) * (1.0 - t)
+            };
+            self.run_amount = self.run_from + (self.run_target - self.run_from) * eased;
+        }
+
         let speed = Vec3::new(self.velocity.x, 0.0, self.velocity.z).length();
         let target = if self.on_ground {
             (speed / RUN_SPEED).clamp(0.0, 1.0)
         } else {
             0.0
         };
-        self.bob_amount += (target - self.bob_amount) * (dt * 10.0).min(1.0);
-        if speed > 0.1 && self.on_ground {
-            let cadence = if speed > WALK_SPEED + 0.5 {
-                RUN_CADENCE
-            } else {
-                WALK_CADENCE
-            };
+        let bob_alpha = 1.0 - (-12.0 * dt).exp();
+        self.bob_amount += (target - self.bob_amount) * bob_alpha;
+        if self.bob_amount > 0.001 {
+            let cadence = WALK_CADENCE + (RUN_CADENCE - WALK_CADENCE) * self.run_amount;
             self.bob_phase += dt * cadence;
         }
     }
+}
+
+fn angle_delta(from: f32, to: f32) -> f32 {
+    (to - from + std::f32::consts::PI).rem_euclid(std::f32::consts::TAU) - std::f32::consts::PI
 }
 
 pub fn movement_parameters(running: bool) -> (f32, f32, f32, f32) {
@@ -160,5 +236,46 @@ mod tests {
         slow.animate(0.1);
         assert!((slow.bob_phase - 0.1 * WALK_CADENCE).abs() < 1e-5);
         assert!(CAMERA_BOB > 0.045);
+    }
+
+    #[test]
+    fn viewmodel_sway_fades_smoothly_when_jump_starts() {
+        let mut camera = Camera::new();
+        camera.on_ground = true;
+        camera.bob_amount = 0.8;
+        camera.bob_phase = 0.6;
+        camera.velocity.x = WALK_SPEED;
+        let before_jump = camera.view_model().w_axis.truncate();
+
+        camera.on_ground = false;
+        camera.animate(1.0 / 60.0);
+        let after_takeoff = camera.view_model().w_axis.truncate();
+        assert!((after_takeoff - before_jump).length() < 0.01);
+        assert!(
+            camera.bob_amount > 0.0,
+            "weapon bob should fade, not snap off"
+        );
+    }
+
+    #[test]
+    fn sprint_fov_eases_to_twelve_degree_bonus() {
+        let mut camera = Camera::new();
+        camera.set_running(true);
+        camera.animate(0.2);
+        assert!(camera.fov_degrees() > BASE_FOV);
+        assert!(camera.fov_degrees() < BASE_FOV + RUN_FOV_BONUS);
+        camera.animate(0.3);
+        assert!((camera.fov_degrees() - (BASE_FOV + RUN_FOV_BONUS)).abs() < 1e-5);
+    }
+
+    #[test]
+    fn mouse_motion_is_scaled_but_applied_immediately() {
+        let mut camera = Camera::new();
+        let start_yaw = camera.yaw;
+        camera.apply_mouse_motion(100.0, 0.0, 0.5);
+        let expected_yaw = start_yaw + 0.1;
+        assert!((camera.yaw - expected_yaw).abs() < 1e-5);
+        camera.animate(0.01);
+        assert!((camera.yaw - expected_yaw).abs() < 1e-5);
     }
 }

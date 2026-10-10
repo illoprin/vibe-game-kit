@@ -3,11 +3,15 @@ use egui_wgpu::{Renderer as EguiRenderer, ScreenDescriptor};
 use egui_winit::State as EguiWinitState;
 use winit::{event::WindowEvent, window::Window};
 
-use crate::renderer::{GraphicsSettings, ShadowFilter};
+use crate::{
+    renderer::{GraphicsSettings, ShadowFilter},
+    settings::ControlSettings,
+};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Tab {
     Pause,
+    Controls,
     Graphics,
 }
 
@@ -25,6 +29,7 @@ impl PauseUi {
         window: &Window,
     ) -> Self {
         let context = Context::default();
+        context.set_zoom_factor(1.5);
         context.set_visuals(egui::Visuals::dark());
         let input = EguiWinitState::new(
             context.clone(),
@@ -56,6 +61,7 @@ impl PauseUi {
         surface_view: &wgpu::TextureView,
         paused: bool,
         settings: &mut GraphicsSettings,
+        controls: &mut ControlSettings,
         map_path: &mut String,
     ) -> (Vec<wgpu::CommandBuffer>, bool, bool) {
         if !paused {
@@ -63,6 +69,7 @@ impl PauseUi {
         }
         let previous_tab = self.tab;
         let previous_map_path = map_path.clone();
+        let previous_sensitivity = controls.mouse_sensitivity;
         let raw_input = self.input.take_egui_input(window);
         let mut resume = false;
         let output = self.context.run(raw_input, |ctx| {
@@ -74,6 +81,7 @@ impl PauseUi {
                 .show(ctx, |ui| {
                     ui.horizontal(|ui| {
                         ui.selectable_value(&mut self.tab, Tab::Pause, "Menu");
+                        ui.selectable_value(&mut self.tab, Tab::Controls, "Controls");
                         ui.selectable_value(&mut self.tab, Tab::Graphics, "Graphics");
                     });
                     ui.separator();
@@ -87,6 +95,7 @@ impl PauseUi {
                             }
                             ui.label("Press Esc to resume or open this menu.");
                         }
+                        Tab::Controls => controls_panel(ui, controls),
                         Tab::Graphics => graphics_panel(ui, settings),
                     }
                 });
@@ -129,9 +138,21 @@ impl PauseUi {
         for id in &output.textures_delta.free {
             self.painter.free_texture(id);
         }
-        let save_requested = self.tab != previous_tab || *map_path != previous_map_path;
+        let save_requested = self.tab != previous_tab
+            || *map_path != previous_map_path
+            || controls.mouse_sensitivity != previous_sensitivity;
         (callback_buffers, resume, save_requested)
     }
+}
+
+fn controls_panel(ui: &mut egui::Ui, controls: &mut ControlSettings) {
+    ui.label("Mouse");
+    ui.add(
+        egui::Slider::new(&mut controls.mouse_sensitivity, 0.1..=3.0)
+            .text("Sensitivity")
+            .step_by(0.05),
+    );
+    ui.label("Hold Space to auto-jump when landing.");
 }
 
 fn graphics_panel(ui: &mut egui::Ui, settings: &mut GraphicsSettings) {

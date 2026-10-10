@@ -55,7 +55,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut pressed = HashSet::new();
     let mut captured = false;
     let mut paused = false;
-    let mut jump_requested = false;
     let mut previous_frame = Instant::now();
 
     event_loop.run(move |event, target| {
@@ -77,7 +76,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                             {
                                 paused = !paused;
                                 pressed.clear();
-                                jump_requested = false;
                                 if paused {
                                     let _ = window.set_cursor_grab(CursorGrabMode::None);
                                     window.set_cursor_visible(true);
@@ -93,8 +91,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 }
                                 persist_settings(&mut app_settings, &renderer);
                             } else if event.state == ElementState::Pressed {
-                                if !paused && pressed.insert(code) && code == KeyCode::Space {
-                                    jump_requested = true;
+                                if !paused {
+                                    pressed.insert(code);
                                 }
                             } else {
                                 pressed.remove(&code);
@@ -120,14 +118,17 @@ fn main() -> Result<(), Box<dyn Error>> {
                             collision::update_player(
                                 &mut camera,
                                 &pressed,
-                                jump_requested,
                                 &renderer.colliders,
                                 dt,
                             );
                         }
-                        jump_requested = false;
-                        match renderer.render(&camera, &window, paused, &mut app_settings.map_path)
-                        {
+                        match renderer.render(
+                            &camera,
+                            &window,
+                            paused,
+                            &mut app_settings.controls,
+                            &mut app_settings.map_path,
+                        ) {
                             Ok((resume_requested, settings_changed)) => {
                                 if settings_changed || resume_requested {
                                     persist_settings(&mut app_settings, &renderer);
@@ -157,8 +158,11 @@ fn main() -> Result<(), Box<dyn Error>> {
                 event: winit::event::DeviceEvent::MouseMotion { delta },
                 ..
             } if captured => {
-                camera.yaw += delta.0 as f32 * 0.002;
-                camera.pitch = (camera.pitch - delta.1 as f32 * 0.002).clamp(-1.54, 1.54);
+                camera.apply_mouse_motion(
+                    delta.0,
+                    delta.1,
+                    app_settings.controls.mouse_sensitivity,
+                );
             }
             Event::AboutToWait => window.request_redraw(),
             _ => {}

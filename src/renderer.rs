@@ -11,6 +11,7 @@ use crate::{
     map::{Map, PointLight, SunLight},
     pipeline::{self, RenderPipelines},
     scene::BuiltScene,
+    settings::ControlSettings,
     targets::{shadow_moments_target, shadow_target, GBuffer, TextureTarget},
     texture,
     types::Uniforms,
@@ -306,6 +307,7 @@ impl Renderer {
         camera: &Camera,
         window: &Window,
         paused: bool,
+        controls: &mut ControlSettings,
         map_path: &mut String,
     ) -> Result<(bool, bool), wgpu::SurfaceError> {
         self.graphics.shadow_resolution =
@@ -343,7 +345,9 @@ impl Renderer {
             light_view_projection: light_view_projection.to_cols_array_2d(),
             model: Mat4::IDENTITY.to_cols_array_2d(),
             view_model: camera.view_model().to_cols_array_2d(),
-            camera_position: (camera.position + Vec3::Y * 1.62).extend(1.0).to_array(),
+            camera_position: (camera.render_position() + Vec3::Y * 1.62)
+                .extend(1.0)
+                .to_array(),
             sun_direction: [
                 self.sun.direction[0],
                 self.sun.direction[1],
@@ -413,6 +417,7 @@ impl Renderer {
             &surface_view,
             paused,
             &mut self.graphics,
+            controls,
             map_path,
         );
 

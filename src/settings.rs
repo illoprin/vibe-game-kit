@@ -6,12 +6,27 @@ use crate::renderer::GraphicsSettings;
 
 pub const SETTINGS_FILE: &str = "settings.toml";
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ControlSettings {
+    pub mouse_sensitivity: f32,
+}
+
+impl Default for ControlSettings {
+    fn default() -> Self {
+        Self {
+            mouse_sensitivity: 1.0,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppSettings {
     /// Map to load on the next application launch.
     pub map_path: String,
     pub graphics: GraphicsSettings,
+    pub controls: ControlSettings,
 }
 
 impl Default for AppSettings {
@@ -19,6 +34,7 @@ impl Default for AppSettings {
         Self {
             map_path: "assets/map1.map".into(),
             graphics: GraphicsSettings::default(),
+            controls: ControlSettings::default(),
         }
     }
 }
@@ -40,6 +56,8 @@ impl AppSettings {
                 if settings.map_path.trim().is_empty() {
                     settings.map_path = Self::default().map_path;
                 }
+                settings.controls.mouse_sensitivity =
+                    settings.controls.mouse_sensitivity.clamp(0.1, 3.0);
                 settings
             }
             Err(error) => {
@@ -71,11 +89,13 @@ mod tests {
         settings.graphics.ssao_enabled = false;
         settings.graphics.ssao_radius = 3.25;
         settings.graphics.shadow_filter = ShadowFilter::Vsm;
+        settings.controls.mouse_sensitivity = 1.75;
 
         let toml = toml::to_string_pretty(&settings).expect("settings should serialize");
         let decoded: AppSettings = toml::from_str(&toml).expect("settings should deserialize");
         assert_eq!(decoded.map_path, settings.map_path);
         assert_eq!(decoded.graphics, settings.graphics);
+        assert_eq!(decoded.controls.mouse_sensitivity, 1.75);
     }
 
     #[test]
@@ -88,5 +108,6 @@ mod tests {
             decoded.graphics.ssao_radius,
             GraphicsSettings::default().ssao_radius
         );
+        assert_eq!(decoded.controls.mouse_sensitivity, 1.0);
     }
 }

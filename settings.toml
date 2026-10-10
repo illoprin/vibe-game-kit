@@ -8,3 +8,6 @@ ssao_strength = 2.299999952316284
 ssao_radius = 1.0
 vignette_strength = 0.75
 exposure = 1.5499999523162842
+
+[controls]
+mouse_sensitivity = 0.949999988079071
