@@ -5,10 +5,53 @@ use winit::keyboard::KeyCode;
 
 use crate::{
     camera::{jump_speed, movement_parameters, Camera, PLAYER_HEIGHT, PLAYER_RADIUS},
+    rigidbody::RigidBody,
     types::Aabb,
 };
 
 const MAX_STEP_HEIGHT: f32 = PLAYER_HEIGHT * 0.25;
+const GRAVITY: f32 = 22.0;
+
+/// Advances a pickup rigidbody using the same swept-axis/AABB collision rules
+/// as the player. Pickups have no input acceleration or step-up behavior.
+pub fn update_rigidbody(body: &mut RigidBody, colliders: &[Aabb], dt: f32) {
+    let dt = dt.clamp(0.0, 0.05);
+    body.on_ground = false;
+    body.velocity.y -= GRAVITY * dt;
+    for axis in [0usize, 2] {
+        let delta = body.velocity[axis] * dt;
+        if delta.abs() < 1e-8 {
+            continue;
+        }
+        body.position[axis] += delta;
+        for collider in colliders {
+            if body_intersects(body.position, body.half_extents, *collider) {
+                let coordinate = match (axis, delta > 0.0) {
+                    (0, true) => collider.min.x - body.half_extents.x,
+                    (0, false) => collider.max.x + body.half_extents.x,
+                    (_, true) => collider.min.z - body.half_extents.z,
+                    (_, false) => collider.max.z + body.half_extents.z,
+                };
+                body.position[axis] = coordinate;
+                body.velocity[axis] = 0.0;
+            }
+        }
+    }
+
+    let dy = body.velocity.y * dt;
+    body.position.y += dy;
+    for collider in colliders {
+        if body_intersects(body.position, body.half_extents, *collider) {
+            if dy > 0.0 {
+                body.position.y = collider.min.y - body.half_extents.y;
+            } else {
+                body.position.y = collider.max.y + body.half_extents.y;
+                body.on_ground = true;
+            }
+            body.velocity.y = 0.0;
+        }
+    }
+}
 
 pub fn update_player(player: &mut Camera, pressed: &HashSet<KeyCode>, colliders: &[Aabb], dt: f32) {
     let dt = dt.clamp(0.0, 0.05);
@@ -24,7 +67,8 @@ pub fn update_player(player: &mut Camera, pressed: &HashSet<KeyCode>, colliders:
     // WASD and sprint cannot add air acceleration. Existing momentum is only
     // redirected by mouse yaw while airborne.
     let grounded_control = player.on_ground;
-    let forward = Vec3::new(player.yaw.cos(), 0.0, player.yaw.sin());
+    let yaw = player.yaw_angle();
+    let forward = Vec3::new(yaw.cos(), 0.0, yaw.sin());
     let right = forward.cross(Vec3::Y);
     let mut wish = Vec3::ZERO;
     if grounded_control {
@@ -152,6 +196,14 @@ fn intersects_at(position: Vec3, collider: Aabb) -> bool {
         position.y + PLAYER_HEIGHT,
         position.z + PLAYER_RADIUS,
     );
+    overlaps(min, max, collider)
+}
+
+fn body_intersects(position: Vec3, half_extents: Vec3, collider: Aabb) -> bool {
+    overlaps(position - half_extents, position + half_extents, collider)
+}
+
+fn overlaps(min: Vec3, max: Vec3, collider: Aabb) -> bool {
     min.x < collider.max.x
         && max.x > collider.min.x
         && min.y < collider.max.y
@@ -254,5 +306,17 @@ mod tests {
         update_player(&mut player, &keys(&[KeyCode::KeyW]), &colliders, 0.05);
         assert_eq!(player.position.y, 0.0);
         assert!(player.position.x < step.min.x);
+    }
+
+    #[test]
+    fn rigidbody_settles_on_floor_using_aabb_collisions() {
+        let floor = floor();
+        let mut body = RigidBody::new(Vec3::new(0.0, 2.0, 0.0), Vec3::splat(0.15));
+        for _ in 0..120 {
+            update_rigidbody(&mut body, &[floor], 1.0 / 60.0);
+        }
+        assert!(body.on_ground);
+        assert!((body.position.y - 0.15).abs() < 1e-4);
+        assert_eq!(body.velocity.y, 0.0);
     }
 }

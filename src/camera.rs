@@ -24,9 +24,6 @@ const VIEW_SWAY_Y: (f32, f32) = (0.03, 0.035);
 // Uniform size multiplier and eye-space placement of the held model. The model
 // is kept small and close so it sits inside the player's collision radius.
 const VIEWMODEL_SCALE: f32 = 0.7;
-const VIEWMODEL_RIGHT: f32 = 0.24;
-const VIEWMODEL_UP: f32 = -0.19;
-const VIEWMODEL_FORWARD: f32 = 0.45;
 
 pub struct Camera {
     /// Collision/physics position (the player's feet).
@@ -39,6 +36,14 @@ pub struct Camera {
     pub bob_amount: f32,
     visual_position: Vec3,
     air_yaw: f32,
+    recoil_yaw: f32,
+    recoil_yaw_target: f32,
+    recoil_pitch: f32,
+    recoil_pitch_target: f32,
+    recoil_visual: f32,
+    recoil_visual_target: f32,
+    recoil_snappiness: f32,
+    recoil_return_speed: f32,
     run_amount: f32,
     run_from: f32,
     run_target: f32,
@@ -59,6 +64,14 @@ impl Camera {
             bob_amount: 0.0,
             visual_position: position,
             air_yaw: -std::f32::consts::FRAC_PI_2,
+            recoil_yaw: 0.0,
+            recoil_yaw_target: 0.0,
+            recoil_pitch: 0.0,
+            recoil_pitch_target: 0.0,
+            recoil_visual: 0.0,
+            recoil_visual_target: 0.0,
+            recoil_snappiness: 25.0,
+            recoil_return_speed: 8.0,
             run_amount: 0.0,
             run_from: 0.0,
             run_target: 0.0,
@@ -76,12 +89,13 @@ impl Camera {
     }
 
     pub fn reset_air_yaw(&mut self) {
-        self.air_yaw = self.yaw;
+        self.air_yaw = self.yaw_angle();
     }
 
     pub fn steer_air_momentum_with_yaw(&mut self) {
-        let yaw_delta = angle_delta(self.air_yaw, self.yaw);
-        self.air_yaw = self.yaw;
+        let yaw = self.yaw_angle();
+        let yaw_delta = angle_delta(self.air_yaw, yaw);
+        self.air_yaw = yaw;
 
         // Rotate existing horizontal momentum with the look direction, but do
         // not add air acceleration from WASD or sprint.
@@ -90,6 +104,29 @@ impl Camera {
         let z = self.velocity.z;
         self.velocity.x = cos * x - sin * z;
         self.velocity.z = sin * x + cos * z;
+    }
+
+    pub fn apply_weapon_recoil(
+        &mut self,
+        pitch_degrees: f32,
+        yaw_degrees: f32,
+        visual_kickback: f32,
+        snappiness: f32,
+        return_speed: f32,
+    ) {
+        self.recoil_pitch_target += pitch_degrees.to_radians();
+        self.recoil_yaw_target += yaw_degrees.to_radians();
+        self.recoil_visual_target = self.recoil_visual_target.max(visual_kickback.max(0.0));
+        self.recoil_snappiness = snappiness.max(0.1);
+        self.recoil_return_speed = return_speed.max(0.1);
+    }
+
+    pub fn yaw_angle(&self) -> f32 {
+        self.yaw + self.recoil_yaw
+    }
+
+    pub fn pitch_angle(&self) -> f32 {
+        (self.pitch + self.recoil_pitch).clamp(-1.54, 1.54)
     }
 
     pub fn set_running(&mut self, running: bool) {
@@ -112,15 +149,15 @@ impl Camera {
 
     pub fn forward(&self) -> Vec3 {
         Vec3::new(
-            self.yaw.cos() * self.pitch.cos(),
-            self.pitch.sin(),
-            self.yaw.sin() * self.pitch.cos(),
+            self.yaw_angle().cos() * self.pitch_angle().cos(),
+            self.pitch_angle().sin(),
+            self.yaw_angle().sin() * self.pitch_angle().cos(),
         )
         .normalize()
     }
 
     pub fn right(&self) -> Vec3 {
-        Vec3::new(self.yaw.cos(), 0.0, self.yaw.sin())
+        Vec3::new(self.yaw_angle().cos(), 0.0, self.yaw_angle().sin())
             .cross(Vec3::Y)
             .normalize()
     }
@@ -133,7 +170,7 @@ impl Camera {
             * Mat4::look_at_rh(eye, eye + forward, Vec3::Y)
     }
 
-    pub fn view_model(&self) -> Mat4 {
+    pub fn view_model_with_offset(&self, offset: [f32; 3], switch_drop: f32) -> Mat4 {
         let forward = self.forward();
         let right = self.right();
         let up = right.cross(forward).normalize();
@@ -145,9 +182,9 @@ impl Camera {
         let y_sway = (self.bob_phase * 2.0).cos().abs() * bob * sway_y;
         let origin = self.visual_position
             + Vec3::Y * 1.62
-            + right * (VIEWMODEL_RIGHT + x_sway)
-            + up * (VIEWMODEL_UP - y_sway)
-            + forward * VIEWMODEL_FORWARD;
+            + right * (offset[0] + x_sway)
+            + up * (offset[1] - y_sway - switch_drop)
+            + forward * (offset[2] - self.recoil_visual);
         Mat4::from_cols(
             (right * VIEWMODEL_SCALE).extend(0.0),
             (up * VIEWMODEL_SCALE).extend(0.0),
@@ -160,6 +197,15 @@ impl Camera {
         let dt = dt.max(0.0);
         let follow_alpha = 1.0 - (-CAMERA_FOLLOW_RATE * dt).exp();
         self.visual_position = self.visual_position.lerp(self.position, follow_alpha);
+
+        let recoil_alpha = 1.0 - (-self.recoil_snappiness * dt).exp();
+        self.recoil_pitch += (self.recoil_pitch_target - self.recoil_pitch) * recoil_alpha;
+        self.recoil_yaw += (self.recoil_yaw_target - self.recoil_yaw) * recoil_alpha;
+        self.recoil_visual += (self.recoil_visual_target - self.recoil_visual) * recoil_alpha;
+        let return_alpha = (-self.recoil_return_speed * dt).exp();
+        self.recoil_pitch_target *= return_alpha;
+        self.recoil_yaw_target *= return_alpha;
+        self.recoil_visual_target *= return_alpha;
 
         if self.run_amount != self.run_target {
             self.run_elapsed += dt;
@@ -217,7 +263,7 @@ mod tests {
     #[test]
     fn viewmodel_is_scaled_and_sits_close_to_the_eye() {
         let camera = Camera::new();
-        let model = camera.view_model();
+        let model = camera.view_model_with_offset([0.24, -0.19, 0.45], 0.0);
         let scale = model.x_axis.truncate().length();
         assert!((scale - VIEWMODEL_SCALE).abs() < 1e-6);
         let eye = camera.position + Vec3::Y * 1.62;
@@ -245,11 +291,17 @@ mod tests {
         camera.bob_amount = 0.8;
         camera.bob_phase = 0.6;
         camera.velocity.x = WALK_SPEED;
-        let before_jump = camera.view_model().w_axis.truncate();
+        let before_jump = camera
+            .view_model_with_offset([0.24, -0.19, 0.45], 0.0)
+            .w_axis
+            .truncate();
 
         camera.on_ground = false;
         camera.animate(1.0 / 60.0);
-        let after_takeoff = camera.view_model().w_axis.truncate();
+        let after_takeoff = camera
+            .view_model_with_offset([0.24, -0.19, 0.45], 0.0)
+            .w_axis
+            .truncate();
         assert!((after_takeoff - before_jump).length() < 0.01);
         assert!(
             camera.bob_amount > 0.0,
@@ -277,5 +329,20 @@ mod tests {
         assert!((camera.yaw - expected_yaw).abs() < 1e-5);
         camera.animate(0.01);
         assert!((camera.yaw - expected_yaw).abs() < 1e-5);
+    }
+
+    #[test]
+    fn weapon_recoil_kicks_camera_and_returns_toward_aim() {
+        let mut camera = Camera::new();
+        camera.apply_weapon_recoil(6.0, 1.0, 0.2, 40.0, 5.0);
+        camera.animate(0.05);
+        let kick = camera.pitch_angle();
+        assert!(kick > 0.0);
+        assert!(camera.recoil_visual > 0.0);
+        for _ in 0..120 {
+            camera.animate(1.0 / 60.0);
+        }
+        assert!(camera.pitch_angle() < kick);
+        assert!(camera.recoil_visual < 0.01);
     }
 }

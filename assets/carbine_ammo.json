@@ -1,0 +1,7 @@
+{
+  "credit": "OGK carbine ammunition pickup",
+  "textures": { "ammo": "carbine_ammo_texture" },
+  "elements": [
+    { "from": [3, 3, 4], "to": [13, 13, 12], "faces": { "north": { "texture": "#ammo" }, "south": { "texture": "#ammo" }, "east": { "texture": "#ammo" }, "west": { "texture": "#ammo" }, "up": { "texture": "#ammo" }, "down": { "texture": "#ammo" } } }
+  ]
+}

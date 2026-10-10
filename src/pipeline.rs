@@ -37,7 +37,7 @@ pub fn create(device: &wgpu::Device, surface_format: wgpu::TextureFormat) -> Ren
         Some("fs_main"),
         &scene_layout,
         &[
-            Some(color_target(wgpu::TextureFormat::Rgba8Unorm)),
+            Some(color_target(wgpu::TextureFormat::Rgba16Float)),
             Some(color_target(wgpu::TextureFormat::Rgba16Float)),
         ],
         Some(wgpu::TextureFormat::Depth32Float),
@@ -75,7 +75,7 @@ pub fn create(device: &wgpu::Device, surface_format: wgpu::TextureFormat) -> Ren
         include_str!("ssao.wgsl"),
         "fs_ssao",
         &ssao_layout,
-        wgpu::TextureFormat::Rgba16Float,
+        wgpu::TextureFormat::R8Unorm,
     );
 
     let ssao_blur_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -94,7 +94,7 @@ pub fn create(device: &wgpu::Device, surface_format: wgpu::TextureFormat) -> Ren
         include_str!("ssao_blur.wgsl"),
         "fs_blur",
         &ssao_blur_layout,
-        wgpu::TextureFormat::Rgba16Float,
+        wgpu::TextureFormat::R8Unorm,
     );
 
     let lighting_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {

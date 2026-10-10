@@ -1,0 +1,7 @@
+{
+  "credit": "OGK shotgun shells pickup",
+  "textures": { "shell": "shotgun_ammo_texture" },
+  "elements": [
+    { "from": [4, 2, 5], "to": [12, 14, 11], "faces": { "north": { "texture": "#shell" }, "south": { "texture": "#shell" }, "east": { "texture": "#shell" }, "west": { "texture": "#shell" }, "up": { "texture": "#shell" }, "down": { "texture": "#shell" } } }
+  ]
+}

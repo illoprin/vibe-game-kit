@@ -1,4 +1,8 @@
-use std::{error::Error, sync::Arc};
+use std::{
+    collections::{HashMap, VecDeque},
+    error::Error,
+    sync::Arc,
+};
 
 use glam::{Mat4, Vec3};
 use serde::{Deserialize, Serialize};
@@ -7,15 +11,17 @@ use winit::{dpi::PhysicalSize, event::WindowEvent, window::Window};
 
 use crate::{
     camera::Camera,
+    game::{GameConfig, GameState},
     gpu,
     map::{Map, PointLight, SunLight},
+    mesh,
     pipeline::{self, RenderPipelines},
     scene::BuiltScene,
     settings::ControlSettings,
-    targets::{shadow_moments_target, shadow_target, GBuffer, TextureTarget},
+    targets::{shadow_moments_target, shadow_target, GBuffer, PostProcess, TextureTarget},
     texture,
-    types::Uniforms,
-    ui::PauseUi,
+    types::{Mesh, Uniforms},
+    ui::{DebugInfo, PauseUi},
 };
 
 const VIEWMODEL_FLAG: u32 = 0x8000_0000;
@@ -71,10 +77,18 @@ pub struct Renderer {
     world_vertices: wgpu::Buffer,
     world_indices: wgpu::Buffer,
     world_count: u32,
-    view_vertices: wgpu::Buffer,
-    view_indices: wgpu::Buffer,
-    view_count: u32,
+    world_vertex_count: u32,
+    weapon_models: HashMap<String, GpuMesh>,
+    pickup_models: HashMap<String, Mesh>,
+    dynamic_vertices: wgpu::Buffer,
+    dynamic_indices: wgpu::Buffer,
+    dynamic_vertex_capacity: u64,
+    dynamic_index_capacity: u64,
+    dynamic_vertex_count: u32,
+    dynamic_index_count: u32,
+    debug_material: u32,
     gbuffer: GBuffer,
+    post_process: PostProcess,
     shadow: TextureTarget,
     shadow_moments: TextureTarget,
     shadow_resolution: u32,
@@ -85,6 +99,17 @@ pub struct Renderer {
     pub graphics: GraphicsSettings,
     pub colliders: Vec<crate::types::Aabb>,
     pub size: PhysicalSize<u32>,
+    pub debug_enabled: bool,
+    frame_times: VecDeque<f32>,
+    frame_vertex_count: u32,
+    frame_draw_calls: u32,
+}
+
+struct GpuMesh {
+    vertices: wgpu::Buffer,
+    indices: wgpu::Buffer,
+    count: u32,
+    vertex_count: u32,
 }
 
 impl Renderer {
@@ -171,16 +196,36 @@ impl Renderer {
 
         let (world_vertices, world_indices, world_count) =
             gpu::create_mesh_buffers(&device, "map geometry", &scene.world)?;
-        let mut view_model = scene.viewmodel;
-        for vertex in &mut view_model.vertices {
-            vertex.material |= VIEWMODEL_FLAG;
+        let world_vertex_count = scene.world.vertices.len() as u32;
+        let mut weapon_models = HashMap::new();
+        for (key, mut model) in scene.weapon_models {
+            for vertex in &mut model.vertices {
+                vertex.material |= VIEWMODEL_FLAG;
+            }
+            model.reverse_winding();
+            let (vertices, indices, count) =
+                gpu::create_mesh_buffers(&device, &format!("held weapon {key}"), &model)?;
+            weapon_models.insert(
+                key,
+                GpuMesh {
+                    vertices,
+                    indices,
+                    count,
+                    vertex_count: model.vertices.len() as u32,
+                },
+            );
         }
-        view_model.reverse_winding();
-        let (view_vertices, view_indices, view_count) =
-            gpu::create_mesh_buffers(&device, "held carbine", &view_model)?;
+        let dynamic_vertices = empty_buffer(
+            &device,
+            "dynamic world vertices",
+            wgpu::BufferUsages::VERTEX,
+        );
+        let dynamic_indices =
+            empty_buffer(&device, "dynamic world indices", wgpu::BufferUsages::INDEX);
 
         let shadow_resolution = graphics.shadow_resolution;
         let gbuffer = GBuffer::new(&device, config.width, config.height);
+        let post_process = PostProcess::new(&device, config.width, config.height);
         let shadow = shadow_target(&device, shadow_resolution);
         let shadow_moments = shadow_moments_target(&device, shadow_resolution);
         let shadow_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -197,14 +242,26 @@ impl Renderer {
             &pipelines,
             &uniform_buffer,
             &gbuffer,
+            &post_process,
             &shadow,
             &shadow_moments,
             &shadow_sampler,
         );
-        let ssao_bind_group = ssao_bind_group(&device, &pipelines, &uniform_buffer, &gbuffer);
-        let ssao_blur_bind_group =
-            ssao_blur_bind_group(&device, &pipelines, &uniform_buffer, &gbuffer);
-        let post_bind_group = post_bind_group(&device, &pipelines, &uniform_buffer, &gbuffer);
+        let ssao_bind_group = ssao_bind_group(
+            &device,
+            &pipelines,
+            &uniform_buffer,
+            &gbuffer,
+            &post_process,
+        );
+        let ssao_blur_bind_group = ssao_blur_bind_group(
+            &device,
+            &pipelines,
+            &uniform_buffer,
+            &gbuffer,
+            &post_process,
+        );
+        let post_bind_group = post_bind_group(&device, &pipelines, &uniform_buffer, &post_process);
 
         Ok(Self {
             surface,
@@ -223,10 +280,18 @@ impl Renderer {
             world_vertices,
             world_indices,
             world_count,
-            view_vertices,
-            view_indices,
-            view_count,
+            world_vertex_count,
+            weapon_models,
+            pickup_models: scene.pickup_models,
+            dynamic_vertices,
+            dynamic_indices,
+            dynamic_vertex_capacity: 4,
+            dynamic_index_capacity: 4,
+            dynamic_vertex_count: 0,
+            dynamic_index_count: 0,
+            debug_material: scene.debug_material,
             gbuffer,
+            post_process,
             shadow,
             shadow_moments,
             shadow_resolution,
@@ -237,6 +302,10 @@ impl Renderer {
             graphics,
             colliders: scene.colliders,
             size,
+            debug_enabled: false,
+            frame_times: VecDeque::with_capacity(600),
+            frame_vertex_count: 0,
+            frame_draw_calls: 0,
         })
     }
 
@@ -248,28 +317,32 @@ impl Renderer {
         self.config.width = size.width;
         self.config.height = size.height;
         self.surface.configure(&self.device, &self.config);
-        self.recreate_gbuffer();
+        self.recreate_targets();
     }
 
-    fn recreate_gbuffer(&mut self) {
+    fn recreate_targets(&mut self) {
         self.gbuffer = GBuffer::new(&self.device, self.config.width, self.config.height);
+        self.post_process = PostProcess::new(&self.device, self.config.width, self.config.height);
         self.ssao_bind_group = ssao_bind_group(
             &self.device,
             &self.pipelines,
             &self.uniform_buffer,
             &self.gbuffer,
+            &self.post_process,
         );
         self.ssao_blur_bind_group = ssao_blur_bind_group(
             &self.device,
             &self.pipelines,
             &self.uniform_buffer,
             &self.gbuffer,
+            &self.post_process,
         );
         self.lighting_bind_group = lighting_bind_group(
             &self.device,
             &self.pipelines,
             &self.uniform_buffer,
             &self.gbuffer,
+            &self.post_process,
             &self.shadow,
             &self.shadow_moments,
             &self.shadow_sampler,
@@ -278,7 +351,7 @@ impl Renderer {
             &self.device,
             &self.pipelines,
             &self.uniform_buffer,
-            &self.gbuffer,
+            &self.post_process,
         );
     }
 
@@ -290,6 +363,7 @@ impl Renderer {
             &self.pipelines,
             &self.uniform_buffer,
             &self.gbuffer,
+            &self.post_process,
             &self.shadow,
             &self.shadow_moments,
             &self.shadow_sampler,
@@ -302,11 +376,76 @@ impl Renderer {
         self.ui.handle_event(window, event)
     }
 
+    fn update_dynamic_mesh(&mut self, game: &GameState) {
+        let mut dynamic = Mesh::default();
+        for pickup in game.pickups.iter().filter(|pickup| pickup.active) {
+            if let Some(template) = self.pickup_models.get(&pickup.kind.model_key()) {
+                let mut instance = template.clone();
+                instance.transform(GameState::pickup_model_transform(pickup));
+                dynamic.append(instance);
+            }
+        }
+        for impact in &game.impacts {
+            mesh::add_box(
+                &mut dynamic,
+                impact.position,
+                Vec3::splat(GameState::impact_size()),
+                self.debug_material,
+            );
+        }
+        if self.debug_enabled {
+            for collider in self.colliders.iter().copied().chain(
+                game.pickups
+                    .iter()
+                    .filter(|pickup| pickup.active)
+                    .map(|pickup| pickup.body.collider()),
+            ) {
+                add_wire_box(&mut dynamic, collider, self.debug_material);
+            }
+        }
+
+        let vertex_bytes = bytemuck::cast_slice(&dynamic.vertices);
+        let index_bytes = bytemuck::cast_slice(&dynamic.indices);
+        self.ensure_dynamic_capacity(vertex_bytes.len() as u64, index_bytes.len() as u64);
+        if !vertex_bytes.is_empty() {
+            self.queue
+                .write_buffer(&self.dynamic_vertices, 0, vertex_bytes);
+            self.queue
+                .write_buffer(&self.dynamic_indices, 0, index_bytes);
+        }
+        self.dynamic_vertex_count = dynamic.vertices.len() as u32;
+        self.dynamic_index_count = dynamic.indices.len() as u32;
+    }
+
+    fn ensure_dynamic_capacity(&mut self, vertex_bytes: u64, index_bytes: u64) {
+        if vertex_bytes > self.dynamic_vertex_capacity {
+            self.dynamic_vertex_capacity = vertex_bytes.next_power_of_two().max(256);
+            self.dynamic_vertices = self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("dynamic world vertices"),
+                size: self.dynamic_vertex_capacity,
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+        }
+        if index_bytes > self.dynamic_index_capacity {
+            self.dynamic_index_capacity = index_bytes.next_power_of_two().max(256);
+            self.dynamic_indices = self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("dynamic world indices"),
+                size: self.dynamic_index_capacity,
+                usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+        }
+    }
+
     pub fn render(
         &mut self,
         camera: &Camera,
+        game_config: &GameConfig,
+        game_state: &GameState,
         window: &Window,
         paused: bool,
+        dt: f32,
         controls: &mut ControlSettings,
         map_path: &mut String,
     ) -> Result<(bool, bool), wgpu::SurfaceError> {
@@ -319,6 +458,12 @@ impl Renderer {
         self.graphics.ssao_radius = self.graphics.ssao_radius.clamp(0.1, 5.0);
         self.graphics.vignette_strength = self.graphics.vignette_strength.clamp(0.0, 1.0);
         self.graphics.exposure = self.graphics.exposure.clamp(0.1, 3.0);
+        self.update_dynamic_mesh(game_state);
+        self.frame_times.push_back(dt.max(0.0));
+        let mut history_seconds = self.frame_times.iter().sum::<f32>();
+        while history_seconds > 10.0 && self.frame_times.len() > 2 {
+            history_seconds -= self.frame_times.pop_front().unwrap_or(0.0);
+        }
 
         let aspect = self.config.width as f32 / self.config.height as f32;
         let view_projection = camera.view_projection(aspect);
@@ -339,12 +484,14 @@ impl Renderer {
                 light.intensity,
             ];
         }
+        let weapon = &game_config.weapons[&game_state.selected_weapon];
+        let view_model = camera.view_model_with_offset(weapon.fpv_offset, game_state.switch_drop());
         let uniforms = Uniforms {
             view_projection: view_projection.to_cols_array_2d(),
             inverse_view_projection: view_projection.inverse().to_cols_array_2d(),
             light_view_projection: light_view_projection.to_cols_array_2d(),
             model: Mat4::IDENTITY.to_cols_array_2d(),
-            view_model: camera.view_model().to_cols_array_2d(),
+            view_model: view_model.to_cols_array_2d(),
             camera_position: (camera.render_position() + Vec3::Y * 1.62)
                 .extend(1.0)
                 .to_array(),
@@ -404,11 +551,28 @@ impl Renderer {
             });
 
         self.render_shadows(&mut encoder);
-        self.render_gbuffer(&mut encoder);
+        self.render_gbuffer(&mut encoder, &game_state.selected_weapon);
         self.render_ssao(&mut encoder);
         self.render_ssao_blur(&mut encoder);
         self.render_lighting(&mut encoder);
         self.render_post(&mut encoder, &surface_view);
+        self.frame_vertex_count = self.world_vertex_count
+            + self.dynamic_vertex_count
+            + self.weapon_models[&game_state.selected_weapon].vertex_count;
+        self.frame_draw_calls = 1 // sun shadow pass
+            + 2 // world and viewmodel G-buffer passes
+            + if self.dynamic_index_count > 0 { 2 } else { 0 }
+            + if self.graphics.ssao_enabled { 2 } else { 0 }
+            + 2; // lighting and final composition
+        let history = self.frame_times.iter().copied().collect::<Vec<_>>();
+        let debug_info = DebugInfo {
+            fps: 1.0 / dt.max(0.000_1),
+            frametime_ms: dt * 1000.0,
+            vertices: self.frame_vertex_count,
+            draw_calls: self.frame_draw_calls,
+            frametimes_seconds: &history,
+        };
+        let hud = game_state.hud_text(game_config);
         let (ui_command_buffers, resume, settings_changed) = self.ui.render(
             window,
             &self.device,
@@ -416,6 +580,9 @@ impl Renderer {
             &mut encoder,
             &surface_view,
             paused,
+            self.debug_enabled,
+            &debug_info,
+            &hud,
             &mut self.graphics,
             controls,
             map_path,
@@ -450,6 +617,11 @@ impl Renderer {
         pass.set_vertex_buffer(0, self.world_vertices.slice(..));
         pass.set_index_buffer(self.world_indices.slice(..), wgpu::IndexFormat::Uint32);
         pass.draw_indexed(0..self.world_count, 0, 0..1);
+        if self.dynamic_index_count > 0 {
+            pass.set_vertex_buffer(0, self.dynamic_vertices.slice(..));
+            pass.set_index_buffer(self.dynamic_indices.slice(..), wgpu::IndexFormat::Uint32);
+            pass.draw_indexed(0..self.dynamic_index_count, 0, 0..1);
+        }
     }
 
     fn render_ssao(&self, encoder: &mut wgpu::CommandEncoder) {
@@ -464,7 +636,10 @@ impl Renderer {
             } else {
                 "clear disabled SSAO to fully visible"
             }),
-            color_attachments: &[Some(color_attachment(&self.gbuffer.ssao_raw.view, load))],
+            color_attachments: &[Some(color_attachment(
+                &self.post_process.ssao_raw.view,
+                load,
+            ))],
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
@@ -480,7 +655,7 @@ impl Renderer {
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("edge-aware bilateral SSAO blur pass"),
             color_attachments: &[Some(color_attachment(
-                &self.gbuffer.ssao.view,
+                &self.post_process.ssao.view,
                 if self.graphics.ssao_enabled {
                     wgpu::LoadOp::Clear(wgpu::Color::BLACK)
                 } else {
@@ -498,13 +673,13 @@ impl Renderer {
         }
     }
 
-    fn render_gbuffer(&self, encoder: &mut wgpu::CommandEncoder) {
+    fn render_gbuffer(&self, encoder: &mut wgpu::CommandEncoder, selected_weapon: &str) {
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("G-buffer scene pass"),
                 color_attachments: &[
                     Some(color_attachment(
-                        &self.gbuffer.albedo.view,
+                        &self.gbuffer.hdr.view,
                         wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                     )),
                     Some(color_attachment(
@@ -524,23 +699,25 @@ impl Renderer {
             pass.set_vertex_buffer(0, self.world_vertices.slice(..));
             pass.set_index_buffer(self.world_indices.slice(..), wgpu::IndexFormat::Uint32);
             pass.draw_indexed(0..self.world_count, 0, 0..1);
+            if self.dynamic_index_count > 0 {
+                pass.set_vertex_buffer(0, self.dynamic_vertices.slice(..));
+                pass.set_index_buffer(self.dynamic_indices.slice(..), wgpu::IndexFormat::Uint32);
+                pass.draw_indexed(0..self.dynamic_index_count, 0, 0..1);
+            }
         }
         // Clear depth for the FPS viewmodel, but retain world albedo/normals. It
         // stays visible against walls while remaining part of deferred lighting.
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("G-buffer viewmodel pass"),
             color_attachments: &[
-                Some(color_attachment(
-                    &self.gbuffer.albedo.view,
-                    wgpu::LoadOp::Load,
-                )),
+                Some(color_attachment(&self.gbuffer.hdr.view, wgpu::LoadOp::Load)),
                 Some(color_attachment(
                     &self.gbuffer.normal.view,
                     wgpu::LoadOp::Load,
                 )),
             ],
             depth_stencil_attachment: Some(depth_attachment(
-                &self.gbuffer.viewmodel_depth.view,
+                &self.post_process.viewmodel_depth.view,
                 wgpu::LoadOp::Clear(1.0),
             )),
             timestamp_writes: None,
@@ -548,16 +725,17 @@ impl Renderer {
         });
         pass.set_pipeline(&self.pipelines.scene);
         pass.set_bind_group(0, &self.scene_bind_group, &[]);
-        pass.set_vertex_buffer(0, self.view_vertices.slice(..));
-        pass.set_index_buffer(self.view_indices.slice(..), wgpu::IndexFormat::Uint32);
-        pass.draw_indexed(0..self.view_count, 0, 0..1);
+        let weapon = &self.weapon_models[selected_weapon];
+        pass.set_vertex_buffer(0, weapon.vertices.slice(..));
+        pass.set_index_buffer(weapon.indices.slice(..), wgpu::IndexFormat::Uint32);
+        pass.draw_indexed(0..weapon.count, 0, 0..1);
     }
 
     fn render_lighting(&self, encoder: &mut wgpu::CommandEncoder) {
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("deferred lighting to HDR buffer"),
             color_attachments: &[Some(color_attachment(
-                &self.gbuffer.hdr.view,
+                &self.post_process.ping_pong.front().view,
                 wgpu::LoadOp::Clear(wgpu::Color::BLACK),
             ))],
             depth_stencil_attachment: None,
@@ -591,6 +769,7 @@ fn lighting_bind_group(
     pipelines: &RenderPipelines,
     uniforms: &wgpu::Buffer,
     gbuffer: &GBuffer,
+    post: &PostProcess,
     shadow: &TextureTarget,
     shadow_moments: &TextureTarget,
     sampler: &wgpu::Sampler,
@@ -603,17 +782,17 @@ fn lighting_bind_group(
                 binding: 0,
                 resource: uniforms.as_entire_binding(),
             },
-            texture_binding(1, &gbuffer.albedo.view),
+            texture_binding(1, &gbuffer.hdr.view),
             texture_binding(2, &gbuffer.normal.view),
             texture_binding(3, &gbuffer.depth.view),
             texture_binding(4, &shadow.view),
-            texture_binding(5, &gbuffer.viewmodel_depth.view),
+            texture_binding(5, &post.viewmodel_depth.view),
             wgpu::BindGroupEntry {
                 binding: 6,
                 resource: wgpu::BindingResource::Sampler(sampler),
             },
             texture_binding(7, &shadow_moments.view),
-            texture_binding(8, &gbuffer.ssao.view),
+            texture_binding(8, &post.ssao.view),
         ],
     })
 }
@@ -623,6 +802,7 @@ fn ssao_bind_group(
     pipelines: &RenderPipelines,
     uniforms: &wgpu::Buffer,
     gbuffer: &GBuffer,
+    post: &PostProcess,
 ) -> wgpu::BindGroup {
     device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("hemisphere SSAO G-buffer inputs"),
@@ -634,7 +814,7 @@ fn ssao_bind_group(
             },
             texture_binding(1, &gbuffer.normal.view),
             texture_binding(2, &gbuffer.depth.view),
-            texture_binding(3, &gbuffer.viewmodel_depth.view),
+            texture_binding(3, &post.viewmodel_depth.view),
         ],
     })
 }
@@ -644,6 +824,7 @@ fn ssao_blur_bind_group(
     pipelines: &RenderPipelines,
     uniforms: &wgpu::Buffer,
     gbuffer: &GBuffer,
+    post: &PostProcess,
 ) -> wgpu::BindGroup {
     device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("bilateral SSAO blur inputs"),
@@ -653,10 +834,10 @@ fn ssao_blur_bind_group(
                 binding: 0,
                 resource: uniforms.as_entire_binding(),
             },
-            texture_binding(1, &gbuffer.ssao_raw.view),
+            texture_binding(1, &post.ssao_raw.view),
             texture_binding(2, &gbuffer.normal.view),
             texture_binding(3, &gbuffer.depth.view),
-            texture_binding(4, &gbuffer.viewmodel_depth.view),
+            texture_binding(4, &post.viewmodel_depth.view),
         ],
     })
 }
@@ -665,7 +846,7 @@ fn post_bind_group(
     device: &wgpu::Device,
     pipelines: &RenderPipelines,
     uniforms: &wgpu::Buffer,
-    gbuffer: &GBuffer,
+    post: &PostProcess,
 ) -> wgpu::BindGroup {
     device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("HDR post processing input"),
@@ -675,7 +856,7 @@ fn post_bind_group(
                 binding: 0,
                 resource: uniforms.as_entire_binding(),
             },
-            texture_binding(1, &gbuffer.hdr.view),
+            texture_binding(1, &post.ping_pong.front().view),
         ],
     })
 }
@@ -751,4 +932,50 @@ fn nearest_shadow_resolution(value: u32) -> u32 {
         .copied()
         .min_by_key(|candidate| candidate.abs_diff(value))
         .unwrap_or(1024)
+}
+
+fn empty_buffer(device: &wgpu::Device, label: &str, usage: wgpu::BufferUsages) -> wgpu::Buffer {
+    device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some(label),
+        size: 4,
+        usage: usage | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    })
+}
+
+fn add_wire_box(mesh: &mut Mesh, bounds: crate::types::Aabb, material: u32) {
+    let min = bounds.min;
+    let max = bounds.max;
+    let size = max - min;
+    let thickness = 0.012;
+    for y in [min.y, max.y] {
+        for z in [min.z, max.z] {
+            mesh::add_box(
+                mesh,
+                Vec3::new((min.x + max.x) * 0.5, y, z),
+                Vec3::new(size.x + thickness, thickness, thickness),
+                material,
+            );
+        }
+    }
+    for x in [min.x, max.x] {
+        for z in [min.z, max.z] {
+            mesh::add_box(
+                mesh,
+                Vec3::new(x, (min.y + max.y) * 0.5, z),
+                Vec3::new(thickness, size.y + thickness, thickness),
+                material,
+            );
+        }
+    }
+    for x in [min.x, max.x] {
+        for y in [min.y, max.y] {
+            mesh::add_box(
+                mesh,
+                Vec3::new(x, y, (min.z + max.z) * 0.5),
+                Vec3::new(thickness, thickness, size.z + thickness),
+                material,
+            );
+        }
+    }
 }

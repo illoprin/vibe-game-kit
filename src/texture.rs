@@ -200,4 +200,18 @@ mod tests {
             assert_eq!(rgba.len(), (CACHE_SIZE * CACHE_SIZE * 4) as usize);
         }
     }
+
+    #[test]
+    fn shipped_pickup_and_weapon_textures_are_valid_small_ppm_files() {
+        for entry in fs::read_dir("assets").expect("assets should be readable") {
+            let path = entry.expect("directory entry should be readable").path();
+            if path.extension().and_then(|extension| extension.to_str()) != Some("ppm") {
+                continue;
+            }
+            let text = fs::read_to_string(&path).expect("PPM should be UTF-8 text");
+            let (width, height, _) = parse_ppm(&text)
+                .unwrap_or_else(|| panic!("{} should contain a valid P3 texture", path.display()));
+            assert!(width <= 32 && height <= 32);
+        }
+    }
 }

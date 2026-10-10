@@ -1,0 +1,47 @@
+name = "default"
+
+[pickups]
+aid_model = "assets/aid_kit_item.json"
+armor_model = "assets/armor_item.json"
+
+[weapons.carbine]
+name = "Assault Rifle"
+model_path = "assets/carbine.json"
+fpv_offset = [0.24, -0.19, 0.45]
+bullets_per_shot = 1
+fire_rate = 10.0
+max_spread = 0.02
+
+[weapons.carbine.ammunition]
+model_path = "assets/carbine_ammo.json"
+amount = 60
+max = 240
+
+[weapons.carbine.recoil]
+pitch_kick = 2.5
+yaw_kick_min = -0.5
+yaw_kick_max = 0.5
+visual_kickback = 0.15
+snappiness = 25.0
+return_speed = 8.0
+
+[weapons.shotgun]
+name = "Shotgun"
+model_path = "assets/shotgun.json"
+fpv_offset = [0.25, -0.35, 0.4]
+bullets_per_shot = 8
+fire_rate = 1.0
+max_spread = 0.08
+
+[weapons.shotgun.ammunition]
+model_path = "assets/shotgun_ammo.json"
+amount = 4
+max = 36
+
+[weapons.shotgun.recoil]
+pitch_kick = 8.0
+yaw_kick_min = -1.5
+yaw_kick_max = 1.5
+visual_kickback = 0.45
+snappiness = 40.0
+return_speed = 5.0

@@ -37,7 +37,7 @@ fn vs_fullscreen(@builtin(vertex_index) index: u32) -> FullscreenOutput {
 }
 
 @fragment
-fn fs_blur(input: FullscreenOutput) -> @location(0) vec4<f32> {
+fn fs_blur(input: FullscreenOutput) -> @location(0) f32 {
     let dimensions = textureDimensions(raw_ssao);
     let size = vec2<i32>(dimensions);
     let pixel = clamp(vec2<i32>(input.position.xy), vec2<i32>(0), size - vec2<i32>(1));
@@ -45,11 +45,11 @@ fn fs_blur(input: FullscreenOutput) -> @location(0) vec4<f32> {
     // The held weapon is rendered with its own overlay depth. It must not enter
     // the world-space AO filter or contribute dark samples around its silhouette.
     if (textureLoad(viewmodel_depth_texture, pixel, 0) < 0.99999) {
-        return vec4<f32>(1.0);
+        return 1.0;
     }
     let center_depth = textureLoad(depth_texture, pixel, 0);
     if (center_depth >= 0.99999) {
-        return vec4<f32>(1.0);
+        return 1.0;
     }
 
     let center_normal = normalize(textureLoad(normal_texture, pixel, 0).xyz);
@@ -82,5 +82,5 @@ fn fs_blur(input: FullscreenOutput) -> @location(0) vec4<f32> {
     if (weight_sum > 0.0001) {
         filtered = ao_sum / weight_sum;
     }
-    return vec4<f32>(filtered, filtered, filtered, 1.0);
+    return filtered;
 }

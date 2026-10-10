@@ -57,7 +57,7 @@ impl Aabb {
     }
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Mesh {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,

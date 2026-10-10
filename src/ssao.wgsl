@@ -42,18 +42,18 @@ fn reconstruct_world(uv: vec2<f32>, depth: f32) -> vec3<f32> {
 }
 
 @fragment
-fn fs_ssao(input: FullscreenOutput) -> @location(0) vec4<f32> {
+fn fs_ssao(input: FullscreenOutput) -> @location(0) f32 {
     let dimensions = textureDimensions(depth_texture);
     let size = vec2<i32>(dimensions);
     let pixel = clamp(vec2<i32>(input.position.xy), vec2<i32>(0), size - vec2<i32>(1));
     // Viewmodel depth belongs to a separate camera overlay and is deliberately
     // excluded from SSAO. Treat the weapon pixels as unoccluded instead.
     if (textureLoad(viewmodel_depth_texture, pixel, 0) < 0.99999) {
-        return vec4<f32>(1.0);
+        return 1.0;
     }
     let center_depth = textureLoad(depth_texture, pixel, 0);
     if (center_depth >= 0.99999) {
-        return vec4<f32>(1.0);
+        return 1.0;
     }
 
     let uv = (vec2<f32>(pixel) + vec2<f32>(0.5)) / vec2<f32>(dimensions);
@@ -130,9 +130,9 @@ fn fs_ssao(input: FullscreenOutput) -> @location(0) vec4<f32> {
     }
 
     if (valid_samples < 1.0) {
-        return vec4<f32>(1.0);
+        return 1.0;
     }
     let raw_visibility = clamp(1.0 - uniforms.ssao_params.x * occlusion / valid_samples, 0.0, 1.0);
     let visibility = pow(raw_visibility, 1.35);
-    return vec4<f32>(visibility, visibility, visibility, 1.0);
+    return visibility;
 }

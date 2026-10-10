@@ -1,0 +1,176 @@
+{
+  "credit": "OGK medium side-by-side double-barrel shotgun; muzzle toward +Z, stock toward -Z",
+  "textures": { "metal": "shotgun_metal", "stock": "shotgun_stock", "recv": "shotgun_action" },
+  "elements": [
+    {
+      "from": [6.2, 7.3, 0.5],
+      "to": [7.8, 9.3, 9.6],
+      "faces": {
+        "north": { "texture": "#metal" },
+        "south": { "texture": "#metal" },
+        "east": { "texture": "#metal" },
+        "west": { "texture": "#metal" },
+        "up": { "texture": "#metal" },
+        "down": { "texture": "#metal" }
+      }
+    },
+    {
+      "from": [8.2, 7.3, 0.5],
+      "to": [9.8, 9.3, 9.6],
+      "faces": {
+        "north": { "texture": "#metal" },
+        "south": { "texture": "#metal" },
+        "east": { "texture": "#metal" },
+        "west": { "texture": "#metal" },
+        "up": { "texture": "#metal" },
+        "down": { "texture": "#metal" }
+      }
+    },
+    {
+      "from": [6.05, 7.15, 0.5],
+      "to": [7.95, 9.45, 1.6],
+      "faces": {
+        "north": { "texture": "#metal" },
+        "south": { "texture": "#metal" },
+        "east": { "texture": "#metal" },
+        "west": { "texture": "#metal" },
+        "up": { "texture": "#metal" },
+        "down": { "texture": "#metal" }
+      }
+    },
+    {
+      "from": [8.05, 7.15, 0.5],
+      "to": [9.95, 9.45, 1.6],
+      "faces": {
+        "north": { "texture": "#metal" },
+        "south": { "texture": "#metal" },
+        "east": { "texture": "#metal" },
+        "west": { "texture": "#metal" },
+        "up": { "texture": "#metal" },
+        "down": { "texture": "#metal" }
+      }
+    },
+    {
+      "from": [7.72, 9.3, 0.9],
+      "to": [8.28, 9.66, 9.6],
+      "faces": {
+        "north": { "texture": "#metal" },
+        "south": { "texture": "#metal" },
+        "east": { "texture": "#metal" },
+        "west": { "texture": "#metal" },
+        "up": { "texture": "#metal" },
+        "down": { "texture": "#metal" }
+      }
+    },
+    {
+      "from": [6.35, 6.0, 5.0],
+      "to": [9.65, 7.3, 9.8],
+      "faces": {
+        "north": { "texture": "#stock" },
+        "south": { "texture": "#stock" },
+        "east": { "texture": "#stock" },
+        "west": { "texture": "#stock" },
+        "up": { "texture": "#stock" },
+        "down": { "texture": "#stock" }
+      }
+    },
+    {
+      "from": [5.9, 6.2, 9.5],
+      "to": [10.1, 9.6, 12.3],
+      "faces": {
+        "north": { "texture": "#recv" },
+        "south": { "texture": "#recv" },
+        "east": { "texture": "#recv" },
+        "west": { "texture": "#recv" },
+        "up": { "texture": "#recv" },
+        "down": { "texture": "#recv" }
+      }
+    },
+    {
+      "from": [7.55, 9.6, 10.2],
+      "to": [8.45, 10.1, 11.5],
+      "faces": {
+        "north": { "texture": "#recv" },
+        "south": { "texture": "#recv" },
+        "east": { "texture": "#recv" },
+        "west": { "texture": "#recv" },
+        "up": { "texture": "#recv" },
+        "down": { "texture": "#recv" }
+      }
+    },
+    {
+      "from": [6.55, 9.5, 11.4],
+      "to": [7.1, 10.6, 12.2],
+      "faces": {
+        "north": { "texture": "#recv" },
+        "south": { "texture": "#recv" },
+        "east": { "texture": "#recv" },
+        "west": { "texture": "#recv" },
+        "up": { "texture": "#recv" },
+        "down": { "texture": "#recv" }
+      }
+    },
+    {
+      "from": [8.9, 9.5, 11.4],
+      "to": [9.45, 10.6, 12.2],
+      "faces": {
+        "north": { "texture": "#recv" },
+        "south": { "texture": "#recv" },
+        "east": { "texture": "#recv" },
+        "west": { "texture": "#recv" },
+        "up": { "texture": "#recv" },
+        "down": { "texture": "#recv" }
+      }
+    },
+    {
+      "from": [7.3, 6.0, 9.3],
+      "to": [8.7, 6.7, 10.1],
+      "faces": {
+        "north": { "texture": "#recv" },
+        "south": { "texture": "#recv" },
+        "east": { "texture": "#recv" },
+        "west": { "texture": "#recv" },
+        "up": { "texture": "#recv" },
+        "down": { "texture": "#recv" }
+      }
+    },
+    {
+      "from": [7.7, 5.7, 11.6],
+      "to": [8.3, 6.4, 12.0],
+      "faces": {
+        "north": { "texture": "#recv" },
+        "south": { "texture": "#recv" },
+        "east": { "texture": "#recv" },
+        "west": { "texture": "#recv" },
+        "up": { "texture": "#recv" },
+        "down": { "texture": "#recv" }
+      }
+    },
+    {
+      "from": [6.4, 5.6, 12.3],
+      "to": [9.6, 9.0, 15.6],
+      "rotation": { "origin": [8, 8.6, 12.3], "axis": "x", "angle": -8 },
+      "faces": {
+        "north": { "texture": "#stock" },
+        "south": { "texture": "#stock" },
+        "east": { "texture": "#stock" },
+        "west": { "texture": "#stock" },
+        "up": { "texture": "#stock" },
+        "down": { "texture": "#stock" }
+      }
+    },
+    {
+      "from": [6.3, 5.3, 15.3],
+      "to": [9.7, 9.3, 15.9],
+      "rotation": { "origin": [8, 8.6, 12.3], "axis": "x", "angle": -8 },
+      "faces": {
+        "north": { "texture": "#recv" },
+        "south": { "texture": "#recv" },
+        "east": { "texture": "#recv" },
+        "west": { "texture": "#recv" },
+        "up": { "texture": "#recv" },
+        "down": { "texture": "#recv" }
+      }
+    }
+  ]
+}

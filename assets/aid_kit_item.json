@@ -1,0 +1,42 @@
+{
+  "credit": "OGK plus-shaped medical cross pickup; from/to are in 1/16 blocks",
+  "textures": { "aid": "aid_texture" },
+  "elements": [
+    {
+      "from": [2, 6, 3],
+      "to": [14, 10, 13],
+      "faces": {
+        "north": { "texture": "#aid", "uv": [0, 0, 16, 16] },
+        "south": { "texture": "#aid", "uv": [0, 0, 16, 16] },
+        "east": { "texture": "#aid", "uv": [0, 0, 16, 16] },
+        "west": { "texture": "#aid", "uv": [0, 0, 16, 16] },
+        "up": { "texture": "#aid", "uv": [0, 0, 16, 16] },
+        "down": { "texture": "#aid", "uv": [0, 0, 16, 16] }
+      }
+    },
+    {
+      "from": [6, 10, 3],
+      "to": [10, 14, 13],
+      "faces": {
+        "north": { "texture": "#aid", "uv": [0, 0, 16, 16] },
+        "south": { "texture": "#aid", "uv": [0, 0, 16, 16] },
+        "east": { "texture": "#aid", "uv": [0, 0, 16, 16] },
+        "west": { "texture": "#aid", "uv": [0, 0, 16, 16] },
+        "up": { "texture": "#aid", "uv": [0, 0, 16, 16] },
+        "down": { "texture": "#aid", "uv": [0, 0, 16, 16] }
+      }
+    },
+    {
+      "from": [6, 2, 3],
+      "to": [10, 6, 13],
+      "faces": {
+        "north": { "texture": "#aid", "uv": [0, 0, 16, 16] },
+        "south": { "texture": "#aid", "uv": [0, 0, 16, 16] },
+        "east": { "texture": "#aid", "uv": [0, 0, 16, 16] },
+        "west": { "texture": "#aid", "uv": [0, 0, 16, 16] },
+        "up": { "texture": "#aid", "uv": [0, 0, 16, 16] },
+        "down": { "texture": "#aid", "uv": [0, 0, 16, 16] }
+      }
+    }
+  ]
+}

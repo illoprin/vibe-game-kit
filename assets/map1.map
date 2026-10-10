@@ -1,5 +1,7 @@
 MAP 1
 
+GAME default
+
 # material <name> <PPM texture path> (texture images must be <= 32x32)
 # Paths are resolved relative to this map file's folder (assets/).
 material concrete concrete.ppm
@@ -38,6 +40,13 @@ box 8.5 0.7 -2.0 1.4 1.4 1.4 crate
 box -9.0 0.5 -7.0 1.0 1.0 1.0 crate
 
 # Minecraft block-model JSON; models may also be placed with: model <path> x y z scale material
+# Pickups reference keys from game.toml and settle onto world surfaces.
+weapon_pickup shotgun 0.0 0.55 3.0
+weapon_pickup carbine -9.0 0.5 -7.0
+ammo_pickup carbine 5.5 0.65 4.5
+item_pickup aid -3.5 0.65 1.2
+item_pickup armor 8.5 0.7 -2.0
+
 # sun <direction-to-light xyz> <linear-rgb> <intensity>
 sun 0.35 0.8 -0.4 1.0 0.93 0.78 2.4
 # point <position xyz> <linear-rgb> <intensity> <radius>
