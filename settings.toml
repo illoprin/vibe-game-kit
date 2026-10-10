@@ -1,4 +1,4 @@
-map_path = "assets/map1.map"
+map_path = "assets/map/map1.map"
 
 [graphics]
 shadow_resolution = 512

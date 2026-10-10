@@ -32,7 +32,7 @@ pub struct AppSettings {
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
-            map_path: "assets/map1.map".into(),
+            map_path: "assets/map/map1.map".into(),
             graphics: GraphicsSettings::default(),
             controls: ControlSettings::default(),
         }
@@ -102,7 +102,7 @@ mod tests {
     fn missing_settings_use_defaults() {
         let decoded: AppSettings = toml::from_str("[graphics]\nssao_enabled = false\n")
             .expect("partial settings should deserialize");
-        assert_eq!(decoded.map_path, "assets/map1.map");
+        assert_eq!(decoded.map_path, "assets/map/map1.map");
         assert!(!decoded.graphics.ssao_enabled);
         assert_eq!(
             decoded.graphics.ssao_radius,

@@ -1,19 +1,19 @@
 name = "default"
 
 [pickups]
-aid_model = "assets/aid_kit_item.json"
-armor_model = "assets/armor_item.json"
+aid_model = "assets/pickups/aid_kit_item.json"
+armor_model = "assets/pickups/armor_item.json"
 
 [weapons.carbine]
 name = "Assault Rifle"
-model_path = "assets/carbine.json"
+model_path = "assets/weapons/carbine.json"
 fpv_offset = [0.24, -0.19, 0.45]
 bullets_per_shot = 1
 fire_rate = 10.0
 max_spread = 0.02
 
 [weapons.carbine.ammunition]
-model_path = "assets/carbine_ammo.json"
+model_path = "assets/weapons/carbine_ammo.json"
 amount = 60
 max = 240
 
@@ -27,14 +27,14 @@ return_speed = 8.0
 
 [weapons.shotgun]
 name = "Shotgun"
-model_path = "assets/shotgun.json"
+model_path = "assets/weapons/shotgun.json"
 fpv_offset = [0.25, -0.35, 0.4]
 bullets_per_shot = 8
 fire_rate = 1.0
 max_spread = 0.08
 
 [weapons.shotgun.ammunition]
-model_path = "assets/shotgun_ammo.json"
+model_path = "assets/weapons/shotgun_ammo.json"
 amount = 4
 max = 36
 

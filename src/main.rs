@@ -68,12 +68,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut map = map::Map::load(&map_file, &game_config.name)?;
     for object in &map.objects {
         if let map::MapObject::Model { path, .. } = object {
-            model::register_adjacent_textures(path, &mut map.materials)?;
+            model::register_adjacent_textures(path, &mut map.materials);
         }
     }
-    model::register_adjacent_textures(&map.viewmodel, &mut map.materials)?;
+    model::register_adjacent_textures(&map.viewmodel, &mut map.materials);
     for path in game_config.model_paths() {
-        model::register_adjacent_textures(&path, &mut map.materials)?;
+        model::register_adjacent_textures(&path, &mut map.materials);
     }
     if !map
         .materials
@@ -85,7 +85,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             texture: PathBuf::from("assets/debug_red.ppm"),
         });
     }
-    let built_scene = scene::build(&map, &game_config)?;
+    let built_scene = scene::build(&mut map, &game_config)?;
     let mut game_state = game::GameState::new(&game_config, &map)?;
     let event_loop = EventLoop::new()?;
     let window = Arc::new(

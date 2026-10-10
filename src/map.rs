@@ -221,7 +221,7 @@ mod tests {
 
     #[test]
     fn default_map_declares_sun_and_two_point_lights() {
-        let map = Map::load("assets/map1.map", "default").expect("demo map should load");
+        let map = Map::load("assets/map/map1.map", "default").expect("demo map should load");
         assert_eq!(map.point_lights.len(), 2);
         assert_eq!(map.pickups.len(), 5);
         let length = map.sun.direction.iter().map(|v| v * v).sum::<f32>().sqrt();
@@ -235,7 +235,7 @@ mod tests {
 
     #[test]
     fn map_is_rejected_when_associated_with_another_game() {
-        let error = Map::load("assets/map1.map", "blue_game")
+        let error = Map::load("assets/map/map1.map", "blue_game")
             .err()
             .expect("different game must be rejected");
         assert!(error.to_string().contains("belongs to game 'default'"));

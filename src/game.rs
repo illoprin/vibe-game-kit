@@ -564,7 +564,7 @@ mod tests {
     #[test]
     fn weapon_pickup_unlocks_weapon_and_adds_configured_ammo() {
         let config = GameConfig::load("game.toml").expect("sample game should load");
-        let map = Map::load("assets/map1.map", &config.name).expect("sample map should load");
+        let map = Map::load("assets/map/map1.map", &config.name).expect("sample map should load");
         let mut state = GameState::new(&config, &map).expect("pickups should validate");
         let mut camera = Camera::new();
         state.pickups[0].body.position = camera.position;
@@ -586,7 +586,7 @@ mod tests {
     #[test]
     fn held_fire_spends_one_round_and_creates_impact_cube() {
         let config = GameConfig::load("game.toml").expect("sample game should load");
-        let map = Map::load("assets/map1.map", &config.name).expect("sample map should load");
+        let map = Map::load("assets/map/map1.map", &config.name).expect("sample map should load");
         let mut state = GameState::new(&config, &map).expect("pickups should validate");
         let mut camera = Camera::new();
         let colliders = [Aabb::from_center_size(Vec3::new(0.0, 1.62, 0.0), Vec3::ONE)];

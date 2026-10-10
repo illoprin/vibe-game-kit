@@ -3,7 +3,7 @@ MAP 1
 GAME default
 
 # material <name> <PPM texture path> (texture images must be <= 32x32)
-# Paths are resolved relative to this map file's folder (assets/).
+# Paths are resolved relative to this map file's folder (assets/map/).
 material concrete concrete.ppm
 material crate crate.ppm
 material platform platform.ppm
