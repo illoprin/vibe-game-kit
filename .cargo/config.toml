@@ -1,0 +1,6 @@
+[target.x86_64-pc-windows-gnu]
+linker = "D:/Apps/msys2/ucrt64/bin/x86_64-w64-mingw32-gcc.exe"
+
+[env]
+CC = "D:/Apps/msys2/ucrt64/bin/clang.exe"
+CXX = "D:/Apps/msys2/ucrt64/bin/clang++.exe"

@@ -1,0 +1,10 @@
+map_path = "assets/map1.map"
+
+[graphics]
+shadow_resolution = 1024
+shadow_filter = "vsm"
+ssao_enabled = true
+ssao_strength = 2.299999952316284
+ssao_radius = 1.0
+vignette_strength = 0.75
+exposure = 1.5499999523162842

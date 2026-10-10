@@ -1,0 +1,218 @@
+{
+  "credit": "OGK low-poly voxel carbine for the Concrete Yard demo; from/to are in 1/16 blocks",
+  "textures": {
+    "metal": "gunmetal",
+    "wood": "walnut"
+  },
+  "elements": [
+    {
+      "from": [6.95, 6.95, 0.5],
+      "to": [9.05, 9.05, 2.0],
+      "faces": {
+        "north": { "texture": "#metal" },
+        "south": { "texture": "#metal" },
+        "east": { "texture": "#metal" },
+        "west": { "texture": "#metal" },
+        "up": { "texture": "#metal" },
+        "down": { "texture": "#metal" }
+      }
+    },
+    {
+      "from": [7.35, 7.35, 1.8],
+      "to": [8.65, 8.65, 5.9],
+      "faces": {
+        "north": { "texture": "#metal" },
+        "south": { "texture": "#metal" },
+        "east": { "texture": "#metal" },
+        "west": { "texture": "#metal" },
+        "up": { "texture": "#metal" },
+        "down": { "texture": "#metal" }
+      }
+    },
+    {
+      "from": [7.7, 8.6, 1.0],
+      "to": [8.3, 9.9, 2.1],
+      "faces": {
+        "north": { "texture": "#metal" },
+        "south": { "texture": "#metal" },
+        "east": { "texture": "#metal" },
+        "west": { "texture": "#metal" },
+        "up": { "texture": "#metal" },
+        "down": { "texture": "#metal" }
+      }
+    },
+    {
+      "from": [6.8, 6.8, 3.4],
+      "to": [9.2, 9.2, 6.4],
+      "faces": {
+        "north": { "texture": "#wood" },
+        "south": { "texture": "#wood" },
+        "east": { "texture": "#wood" },
+        "west": { "texture": "#wood" },
+        "up": { "texture": "#wood" },
+        "down": { "texture": "#wood" }
+      }
+    },
+    {
+      "from": [6.6, 6.9, 6.0],
+      "to": [9.4, 10.1, 10.0],
+      "faces": {
+        "north": { "texture": "#metal" },
+        "south": { "texture": "#metal" },
+        "east": { "texture": "#metal" },
+        "west": { "texture": "#metal" },
+        "up": { "texture": "#metal" },
+        "down": { "texture": "#metal" }
+      }
+    },
+    {
+      "from": [7.0, 10.05, 5.9],
+      "to": [9.0, 10.7, 10.2],
+      "faces": {
+        "north": { "texture": "#metal" },
+        "south": { "texture": "#metal" },
+        "east": { "texture": "#metal" },
+        "west": { "texture": "#metal" },
+        "up": { "texture": "#metal" },
+        "down": { "texture": "#metal" }
+      }
+    },
+    {
+      "from": [7.5, 10.65, 8.7],
+      "to": [8.5, 11.5, 9.9],
+      "faces": {
+        "north": { "texture": "#metal" },
+        "south": { "texture": "#metal" },
+        "east": { "texture": "#metal" },
+        "west": { "texture": "#metal" },
+        "up": { "texture": "#metal" },
+        "down": { "texture": "#metal" }
+      }
+    },
+    {
+      "from": [9.3, 8.4, 7.1],
+      "to": [10.35, 9.4, 8.3],
+      "faces": {
+        "north": { "texture": "#metal" },
+        "south": { "texture": "#metal" },
+        "east": { "texture": "#metal" },
+        "west": { "texture": "#metal" },
+        "up": { "texture": "#metal" },
+        "down": { "texture": "#metal" }
+      }
+    },
+    {
+      "from": [9.3, 8.1, 8.35],
+      "to": [9.56, 9.3, 9.5],
+      "faces": {
+        "north": { "texture": "#metal" },
+        "south": { "texture": "#metal" },
+        "east": { "texture": "#metal" },
+        "west": { "texture": "#metal" },
+        "up": { "texture": "#metal" },
+        "down": { "texture": "#metal" }
+      }
+    },
+    {
+      "from": [6.9, 4.9, 7.6],
+      "to": [9.1, 7.4, 9.4],
+      "rotation": { "origin": [8, 7.4, 9.4], "axis": "x", "angle": -14 },
+      "faces": {
+        "north": { "texture": "#metal" },
+        "south": { "texture": "#metal" },
+        "east": { "texture": "#metal" },
+        "west": { "texture": "#metal" },
+        "up": { "texture": "#metal" },
+        "down": { "texture": "#metal" }
+      }
+    },
+    {
+      "from": [7.3, 5.9, 9.2],
+      "to": [8.7, 6.3, 11.2],
+      "faces": {
+        "north": { "texture": "#metal" },
+        "south": { "texture": "#metal" },
+        "east": { "texture": "#metal" },
+        "west": { "texture": "#metal" },
+        "up": { "texture": "#metal" },
+        "down": { "texture": "#metal" }
+      }
+    },
+    {
+      "from": [7.75, 6.2, 9.25],
+      "to": [8.25, 7.0, 9.6],
+      "faces": {
+        "north": { "texture": "#metal" },
+        "south": { "texture": "#metal" },
+        "east": { "texture": "#metal" },
+        "west": { "texture": "#metal" },
+        "up": { "texture": "#metal" },
+        "down": { "texture": "#metal" }
+      }
+    },
+    {
+      "from": [7.85, 6.35, 9.65],
+      "to": [8.15, 6.85, 9.95],
+      "faces": {
+        "north": { "texture": "#metal" },
+        "south": { "texture": "#metal" },
+        "east": { "texture": "#metal" },
+        "west": { "texture": "#metal" },
+        "up": { "texture": "#metal" },
+        "down": { "texture": "#metal" }
+      }
+    },
+    {
+      "from": [6.8, 4.6, 9.7],
+      "to": [9.2, 7.2, 11.3],
+      "rotation": { "origin": [8, 7.2, 10.2], "axis": "x", "angle": 18 },
+      "faces": {
+        "north": { "texture": "#wood" },
+        "south": { "texture": "#wood" },
+        "east": { "texture": "#wood" },
+        "west": { "texture": "#wood" },
+        "up": { "texture": "#wood" },
+        "down": { "texture": "#wood" }
+      }
+    },
+    {
+      "from": [6.7, 6.6, 9.9],
+      "to": [9.3, 9.9, 14.8],
+      "rotation": { "origin": [8, 8.2, 10.6], "axis": "x", "angle": -10 },
+      "faces": {
+        "north": { "texture": "#wood" },
+        "south": { "texture": "#wood" },
+        "east": { "texture": "#wood" },
+        "west": { "texture": "#wood" },
+        "up": { "texture": "#wood" },
+        "down": { "texture": "#wood" }
+      }
+    },
+    {
+      "from": [6.55, 6.35, 14.4],
+      "to": [9.45, 10.05, 15.0],
+      "rotation": { "origin": [8, 8.2, 10.6], "axis": "x", "angle": -10 },
+      "faces": {
+        "north": { "texture": "#metal" },
+        "south": { "texture": "#metal" },
+        "east": { "texture": "#metal" },
+        "west": { "texture": "#metal" },
+        "up": { "texture": "#metal" },
+        "down": { "texture": "#metal" }
+      }
+    },
+    {
+      "from": [6.4, 7.4, 11.8],
+      "to": [6.72, 8.7, 12.8],
+      "rotation": { "origin": [8, 8.2, 10.6], "axis": "x", "angle": -10 },
+      "faces": {
+        "north": { "texture": "#metal" },
+        "south": { "texture": "#metal" },
+        "east": { "texture": "#metal" },
+        "west": { "texture": "#metal" },
+        "up": { "texture": "#metal" },
+        "down": { "texture": "#metal" }
+      }
+    }
+  ]
+}
