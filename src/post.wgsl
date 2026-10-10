@@ -42,9 +42,11 @@ fn aces_fitted(color: vec3<f32>) -> vec3<f32> {
 
 @fragment
 fn fs_post(input: FullscreenOutput) -> @location(0) vec4<f32> {
-    let size = vec2<i32>(textureDimensions(hdr_texture));
-    let pixel = clamp(vec2<i32>(input.position.xy), vec2<i32>(0), size - vec2<i32>(1));
-    var color = textureLoad(hdr_texture, pixel, 0).rgb;
+    // The G-buffer and every effect may render at a lower internal resolution
+    // than the swap chain, so sample the HDR buffer with the linear sampler to
+    // upscale it into the full-resolution present surface. At scale 1.0 the
+    // sample lands on exact texel centres and is identical to a texture load.
+    var color = textureSample(hdr_texture, post_sampler, input.uv).rgb;
 
     let bloom_sample = textureSample(bloom_texture, post_sampler, input.uv).rgb;
     color += bloom_sample * post.bloom.x;
@@ -62,8 +64,9 @@ fn fs_post(input: FullscreenOutput) -> @location(0) vec4<f32> {
     }
     color *= exposure;
 
-    let uv = (vec2<f32>(pixel) + vec2<f32>(0.5)) / vec2<f32>(size);
-    let centered = (uv - vec2<f32>(0.5)) * vec2<f32>(1.0, f32(size.y) / f32(size.x));
+    // `adaptation.w` carries height/width so the vignette keeps its shape at any
+    // internal render scale.
+    let centered = (input.uv - vec2<f32>(0.5)) * vec2<f32>(1.0, post.adaptation.w);
     let vignette = 1.0 - post.effects.x * smoothstep(0.2, 0.72, length(centered));
     color = aces_fitted(color * vignette);
     return vec4<f32>(color, 1.0);

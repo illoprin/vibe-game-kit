@@ -144,6 +144,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 }
                                 persist_settings(&mut app_settings, &renderer);
                             } else if event.state == ElementState::Pressed {
+                                if code == KeyCode::F2 && !event.repeat {
+                                    renderer.request_screenshot();
+                                }
                                 if !paused && !event.repeat {
                                     if code == KeyCode::F1 {
                                         renderer.debug_enabled = !renderer.debug_enabled;

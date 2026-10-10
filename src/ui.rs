@@ -284,6 +284,16 @@ fn graphics_panel(ui: &mut egui::Ui, settings: &mut GraphicsSettings) {
         });
 
     ui.separator();
+    ui.label("Internal resolution");
+    ui.add(
+        egui::Slider::new(&mut settings.render_scale, 0.25..=1.0)
+            .text("Render scale")
+            .step_by(0.05)
+            .custom_formatter(|value, _| format!("{:.0}%", value * 100.0)),
+    );
+    ui.label("Fraction of the window the G-buffer and effects render at; the HUD stays sharp.");
+
+    ui.separator();
     ui.checkbox(&mut settings.ssao_enabled, "Enable SSAO");
     if settings.ssao_enabled {
         ui.add(

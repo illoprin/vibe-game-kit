@@ -207,7 +207,9 @@ pub fn create(device: &wgpu::Device, surface_format: wgpu::TextureFormat) -> Ren
         label: Some("post processing bindings"),
         entries: &[
             uniform_entry(0, wgpu::ShaderStages::FRAGMENT),
-            texture_entry(1, wgpu::TextureViewDimension::D2, false),
+            // Sampled (not loaded) so the final composition can upscale a
+            // reduced-resolution HDR buffer to the full surface.
+            texture_entry(1, wgpu::TextureViewDimension::D2, true),
             texture_entry(2, wgpu::TextureViewDimension::D2, true),
             wgpu::BindGroupLayoutEntry {
                 binding: 3,

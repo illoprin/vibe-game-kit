@@ -1,8 +1,9 @@
 use std::{
     collections::{HashMap, VecDeque},
     error::Error,
-    path::Path,
+    path::{Path, PathBuf},
     sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use glam::{Mat4, Vec3};
@@ -30,6 +31,10 @@ use crate::{
 const VIEWMODEL_FLAG: u32 = 0x8000_0000;
 const SHADOW_RESOLUTIONS: [u32; 4] = [256, 512, 1024, 2048];
 const LENS_DIRT_PATH: &str = "assets/lens_dirt.png";
+/// Folder the `F2` screenshot hotkey writes PNG captures into.
+const SCREENSHOT_DIR: &str = "screenshots";
+/// Smallest internal render scale the Graphics slider can select.
+const MIN_RENDER_SCALE: f32 = 0.25;
 /// HDR luminance above which bloom starts, and the width of its soft-threshold
 /// knee. These are linear HDR values, so sunlit surfaces (which exceed 1.0)
 /// bloom while dimmer highlights fade in gently instead of hard-clipping.
@@ -65,6 +70,9 @@ pub struct GraphicsSettings {
     pub bloom_saturation: f32,
     pub lens_dirt_enabled: bool,
     pub lens_dirt_intensity: f32,
+    /// Fraction of the surface resolution the G-buffer and every screen-space
+    /// effect render at. The HUD/menus always draw at full resolution.
+    pub render_scale: f32,
 }
 
 impl Default for GraphicsSettings {
@@ -89,6 +97,7 @@ impl Default for GraphicsSettings {
             bloom_saturation: 1.35,
             lens_dirt_enabled: false,
             lens_dirt_intensity: 0.6,
+            render_scale: 1.0,
         }
     }
 }
@@ -138,6 +147,11 @@ pub struct Renderer {
     point_lights: Vec<PointLight>,
     ui: PauseUi,
     pub graphics: GraphicsSettings,
+    /// Backing fraction currently in use; tracks `graphics.render_scale` so the
+    /// targets are rebuilt only when it actually changes.
+    render_scale: f32,
+    screenshot_requested: bool,
+    screenshot_supported: bool,
     pub colliders: Vec<crate::types::Aabb>,
     pub size: PhysicalSize<u32>,
     pub debug_enabled: bool,
@@ -207,8 +221,17 @@ impl Renderer {
             .copied()
             .find(wgpu::TextureFormat::is_srgb)
             .unwrap_or(capabilities.formats[0]);
+        // Swap-chain images are only readable for screenshots when the adapter
+        // advertises COPY_SRC (it always supports RENDER_ATTACHMENT).
+        let screenshot_supported = capabilities.usages.contains(wgpu::TextureUsages::COPY_SRC);
+        let mut surface_usage = wgpu::TextureUsages::RENDER_ATTACHMENT;
+        if screenshot_supported {
+            surface_usage |= wgpu::TextureUsages::COPY_SRC;
+        } else {
+            eprintln!("This adapter does not support swap-chain screenshots; F2 is disabled");
+        }
         let config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            usage: surface_usage,
             format,
             width: size.width.max(1),
             height: size.height.max(1),
@@ -282,8 +305,10 @@ impl Renderer {
             empty_buffer(&device, "dynamic world indices", wgpu::BufferUsages::INDEX);
 
         let shadow_resolution = graphics.shadow_resolution;
-        let gbuffer = GBuffer::new(&device, config.width, config.height);
-        let post_process = PostProcess::new(&device, config.width, config.height);
+        let render_scale = graphics.render_scale.clamp(MIN_RENDER_SCALE, 1.0);
+        let (render_width, render_height) = scaled_size(config.width, config.height, render_scale);
+        let gbuffer = GBuffer::new(&device, render_width, render_height);
+        let post_process = PostProcess::new(&device, render_width, render_height);
         let shadow = shadow_target(&device, shadow_resolution);
         let shadow_moments = shadow_moments_target(&device, shadow_resolution);
         let shadow_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -384,6 +409,9 @@ impl Renderer {
             point_lights: map.point_lights.clone(),
             ui,
             graphics,
+            render_scale,
+            screenshot_requested: false,
+            screenshot_supported,
             colliders: scene.colliders,
             size,
             debug_enabled: false,
@@ -405,8 +433,9 @@ impl Renderer {
     }
 
     fn recreate_targets(&mut self) {
-        self.gbuffer = GBuffer::new(&self.device, self.config.width, self.config.height);
-        self.post_process = PostProcess::new(&self.device, self.config.width, self.config.height);
+        let (width, height) = self.render_size();
+        self.gbuffer = GBuffer::new(&self.device, width, height);
+        self.post_process = PostProcess::new(&self.device, width, height);
         self.ssao_bind_group = ssao_bind_group(
             &self.device,
             &self.pipelines,
@@ -458,6 +487,22 @@ impl Renderer {
         );
         self.graphics.shadow_resolution = resolution;
         self.shadow_resolution = resolution;
+    }
+
+    /// Backing resolution of the G-buffer and screen-space effects for the
+    /// current surface size and render scale.
+    fn render_size(&self) -> (u32, u32) {
+        scaled_size(self.config.width, self.config.height, self.render_scale)
+    }
+
+    /// Queues a PNG capture of the next presented frame (HUD included). The file
+    /// is written to [`SCREENSHOT_DIR`] once the frame has been submitted.
+    pub fn request_screenshot(&mut self) {
+        if self.screenshot_supported {
+            self.screenshot_requested = true;
+        } else {
+            eprintln!("Screenshots are not supported on this adapter");
+        }
     }
 
     pub fn handle_ui_event(&mut self, window: &Window, event: &WindowEvent) -> bool {
@@ -541,6 +586,11 @@ impl Renderer {
             nearest_shadow_resolution(self.graphics.shadow_resolution);
         if self.shadow_resolution != self.graphics.shadow_resolution {
             self.recreate_shadow(self.graphics.shadow_resolution);
+        }
+        self.graphics.render_scale = self.graphics.render_scale.clamp(MIN_RENDER_SCALE, 1.0);
+        if (self.render_scale - self.graphics.render_scale).abs() > f32::EPSILON {
+            self.render_scale = self.graphics.render_scale;
+            self.recreate_targets();
         }
         self.graphics.ssao_strength = self.graphics.ssao_strength.clamp(0.0, 8.0);
         self.graphics.ssao_radius = self.graphics.ssao_radius.clamp(0.1, 5.0);
@@ -673,7 +723,9 @@ impl Renderer {
                 self.graphics.eye_adaptation_min_exposure,
                 self.graphics.eye_adaptation_max_exposure,
                 dt.max(0.0),
-                0.0,
+                // Height/width of the present surface, used by the vignette so
+                // its shape is independent of the internal render scale.
+                self.config.height as f32 / self.config.width as f32,
             ],
         };
         self.queue.write_buffer(
@@ -750,10 +802,119 @@ impl Renderer {
             map_path,
         );
 
+        // A screenshot copies the finished swap-chain image (scene + HUD) before
+        // it is presented, then reads it back synchronously below.
+        let screenshot = if self.screenshot_requested {
+            self.screenshot_requested = false;
+            self.encode_screenshot(&mut encoder, &frame.texture)
+        } else {
+            None
+        };
+
         self.queue
             .submit(ui_command_buffers.into_iter().chain([encoder.finish()]));
         frame.present();
+        if let Some(capture) = screenshot {
+            self.finish_screenshot(capture);
+        }
         Ok((resume, settings_changed))
+    }
+
+    /// Records a texture-to-buffer copy of the swap-chain image. Returns `None`
+    /// (with a warning) on formats this readback does not understand.
+    fn encode_screenshot(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        texture: &wgpu::Texture,
+    ) -> Option<ScreenshotCapture> {
+        if !self.screenshot_supported {
+            return None;
+        }
+        let bgra = match self.config.format {
+            wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb => true,
+            wgpu::TextureFormat::Rgba8Unorm | wgpu::TextureFormat::Rgba8UnormSrgb => false,
+            other => {
+                eprintln!("Screenshots are not supported for surface format {other:?}");
+                return None;
+            }
+        };
+        let width = self.config.width;
+        let height = self.config.height;
+        let unpadded_bytes_per_row = width * 4;
+        let padded_bytes_per_row = unpadded_bytes_per_row
+            .div_ceil(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT)
+            * wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
+        let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("screenshot readback"),
+            size: (padded_bytes_per_row * height) as u64,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+        encoder.copy_texture_to_buffer(
+            wgpu::TexelCopyTextureInfo {
+                texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::TexelCopyBufferInfo {
+                buffer: &buffer,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(padded_bytes_per_row),
+                    rows_per_image: Some(height),
+                },
+            },
+            wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+        );
+        Some(ScreenshotCapture {
+            buffer,
+            width,
+            height,
+            unpadded_bytes_per_row,
+            padded_bytes_per_row,
+            bgra,
+        })
+    }
+
+    /// Maps the readback buffer, converts it to RGBA and writes the PNG.
+    fn finish_screenshot(&self, capture: ScreenshotCapture) {
+        let slice = capture.buffer.slice(..);
+        let (sender, receiver) = std::sync::mpsc::channel();
+        slice.map_async(wgpu::MapMode::Read, move |result| {
+            let _ = sender.send(result);
+        });
+        let _ = self.device.poll(wgpu::Maintain::Wait);
+        if !matches!(receiver.recv(), Ok(Ok(()))) {
+            eprintln!("Could not read the screenshot back from the GPU");
+            return;
+        }
+        let rgba = {
+            let data = slice.get_mapped_range();
+            let mut rgba =
+                Vec::with_capacity((capture.unpadded_bytes_per_row * capture.height) as usize);
+            for row in 0..capture.height {
+                let start = (row * capture.padded_bytes_per_row) as usize;
+                let line = &data[start..start + capture.unpadded_bytes_per_row as usize];
+                if capture.bgra {
+                    for pixel in line.chunks_exact(4) {
+                        rgba.extend_from_slice(&[pixel[2], pixel[1], pixel[0], 255]);
+                    }
+                } else {
+                    rgba.extend_from_slice(line);
+                }
+            }
+            rgba
+        };
+        capture.buffer.unmap();
+        match save_screenshot(rgba, capture.width, capture.height) {
+            Ok(path) => eprintln!("Screenshot saved to {}", path.display()),
+            Err(error) => eprintln!("Could not save the screenshot: {error}"),
+        }
     }
 
     fn render_shadows(&self, encoder: &mut wgpu::CommandEncoder) {
@@ -1436,6 +1597,38 @@ fn nearest_shadow_resolution(value: u32) -> u32 {
         .unwrap_or(1024)
 }
 
+/// Internal render dimensions for a surface size and a scale in
+/// [`MIN_RENDER_SCALE`]`..=1.0`, clamped to at least one texel.
+fn scaled_size(width: u32, height: u32, scale: f32) -> (u32, u32) {
+    let scale = scale.clamp(MIN_RENDER_SCALE, 1.0);
+    (
+        ((width as f32 * scale).round() as u32).max(1),
+        ((height as f32 * scale).round() as u32).max(1),
+    )
+}
+
+/// Pending screenshot readback recorded during a frame.
+struct ScreenshotCapture {
+    buffer: wgpu::Buffer,
+    width: u32,
+    height: u32,
+    unpadded_bytes_per_row: u32,
+    padded_bytes_per_row: u32,
+    /// The swap-chain format stores blue first and must be swizzled to RGBA.
+    bgra: bool,
+}
+
+/// Writes an RGBA capture as a timestamped PNG inside [`SCREENSHOT_DIR`].
+fn save_screenshot(rgba: Vec<u8>, width: u32, height: u32) -> Result<PathBuf, Box<dyn Error>> {
+    let image = image::RgbaImage::from_raw(width, height, rgba)
+        .ok_or("screenshot data did not match its dimensions")?;
+    std::fs::create_dir_all(SCREENSHOT_DIR)?;
+    let millis = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
+    let path = Path::new(SCREENSHOT_DIR).join(format!("screenshot_{millis}.png"));
+    image.save(&path)?;
+    Ok(path)
+}
+
 fn empty_buffer(device: &wgpu::Device, label: &str, usage: wgpu::BufferUsages) -> wgpu::Buffer {
     device.create_buffer(&wgpu::BufferDescriptor {
         label: Some(label),
@@ -1479,5 +1672,22 @@ fn add_wire_box(mesh: &mut Mesh, bounds: crate::types::Aabb, material: u32) {
                 material,
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::scaled_size;
+
+    #[test]
+    fn scaled_size_scales_and_clamps() {
+        assert_eq!(scaled_size(1280, 800, 1.0), (1280, 800));
+        assert_eq!(scaled_size(1280, 800, 0.5), (640, 400));
+        assert_eq!(scaled_size(1280, 800, 0.25), (320, 200));
+        // Never shrinks below a single texel.
+        assert_eq!(scaled_size(1, 1, 0.25), (1, 1));
+        // Out-of-range scales are clamped to [0.25, 1.0].
+        assert_eq!(scaled_size(1280, 800, 0.0), (320, 200));
+        assert_eq!(scaled_size(1280, 800, 2.0), (1280, 800));
     }
 }
