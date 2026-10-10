@@ -89,6 +89,30 @@ fn checkerboard() -> Vec<u8> {
     rgba
 }
 
+/// Decodes `lens_dirt.png` and returns its pixels plus a gain that makes the
+/// mask average to 1.0 (bright specks amplify bloom without dimming the rest of
+/// the frame). Applying the gain in the shader keeps values above 1.0, which a
+/// `u8` texture could not store. Returns `None` when the file is missing or
+/// unreadable so the caller can substitute a neutral mask.
+pub fn load_lens_dirt(path: &Path) -> Option<(u32, u32, Vec<u8>, f32)> {
+    let bytes = fs::read(path).ok()?;
+    let image = image::load_from_memory(&bytes).ok()?;
+    let rgba = image.to_rgba8();
+    let (width, height) = rgba.dimensions();
+    let pixels = rgba.into_raw();
+    let pixel_count = (width * height) as f32;
+    if pixel_count < 1.0 {
+        return None;
+    }
+    let mean = pixels
+        .chunks_exact(4)
+        .map(|pixel| (pixel[0] as f32 + pixel[1] as f32 + pixel[2] as f32) / (3.0 * 255.0))
+        .sum::<f32>()
+        / pixel_count;
+    let gain = if mean > 1e-3 { 1.0 / mean } else { 1.0 };
+    Some((width, height, pixels, gain))
+}
+
 fn parse_ppm(text: &str) -> Option<(u32, u32, Vec<u8>)> {
     let tokens: Vec<_> = text
         .lines()
@@ -155,5 +179,29 @@ mod tests {
                 .unwrap_or_else(|| panic!("{} should contain a valid P3 texture", path.display()));
             assert!(width <= 32 && height <= 32);
         }
+    }
+
+    #[test]
+    fn lens_dirt_decodes_with_a_normalising_gain() {
+        let path = Path::new("assets").join("lens_dirt.png");
+        let (width, height, pixels, gain) =
+            load_lens_dirt(&path).expect("the shipped lens dirt should decode");
+        assert!(width > 0 && height > 0);
+        assert_eq!(pixels.len(), (width * height * 4) as usize);
+        let mean = pixels
+            .chunks_exact(4)
+            .map(|pixel| (pixel[0] as f32 + pixel[1] as f32 + pixel[2] as f32) / (3.0 * 255.0))
+            .sum::<f32>()
+            / (width * height) as f32;
+        assert!(
+            (mean * gain - 1.0).abs() < 1e-3,
+            "gain {gain} should bring the mask mean to 1.0"
+        );
+        assert!(gain > 1.0, "a dark dust mask should brighten, not dim");
+    }
+
+    #[test]
+    fn missing_lens_dirt_is_reported_as_absent() {
+        assert!(load_lens_dirt(Path::new("assets/__no_lens_dirt__.png")).is_none());
     }
 }

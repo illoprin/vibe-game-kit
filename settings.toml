@@ -4,10 +4,22 @@ map_path = "assets/map/map1.map"
 shadow_resolution = 512
 shadow_filter = "vsm"
 ssao_enabled = true
-ssao_strength = 2.9000000953674316
-ssao_radius = 0.699999988079071
-vignette_strength = 0.75
-exposure = 1.850000023841858
+ssao_strength = 4.0
+ssao_radius = 1.0499999523162842
+vignette_strength = 0.800000011920929
+exposure = 0.949999988079071
+eye_adaptation_enabled = true
+eye_adaptation_speed = 2.5999999046325684
+eye_adaptation_key = 0.07000000029802322
+eye_adaptation_min_exposure = 0.15000000596046448
+eye_adaptation_max_exposure = 1.899999976158142
+bloom_enabled = true
+bloom_intensity = 1.0499999523162842
+bloom_passes = 5
+bloom_radius = 1.350000023841858
+bloom_saturation = 1.2000000476837158
+lens_dirt_enabled = true
+lens_dirt_intensity = 0.75
 
 [controls]
 mouse_sensitivity = 0.8999999761581421

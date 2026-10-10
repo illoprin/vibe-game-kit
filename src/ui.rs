@@ -8,12 +8,32 @@ use crate::{
     settings::ControlSettings,
 };
 
+const PIXEL_FONT_PATH: &str = "assets/ui/GourangaPixel.ttf";
+const SECONDARY_FONT_PATH: &str = "assets/ui/FiraCode.ttf";
+const CROSSHAIR_PATH: &str = "assets/ui/crosshair.png";
+
+const HUD_YELLOW: egui::Color32 = egui::Color32::from_rgb(0xEF, 0xE6, 0x1C);
+/// Semi-transparent black, matching the reference panels.
+const HUD_PANEL: egui::Color32 = egui::Color32::from_rgba_premultiplied(0, 0, 0, 180);
+const HUD_LABEL: egui::Color32 = egui::Color32::from_rgb(0xC7, 0xB8, 0xCE);
+const HUD_SECONDARY: egui::Color32 = egui::Color32::from_rgb(0x9B, 0x90, 0xA3);
+
 pub struct DebugInfo<'a> {
     pub fps: f32,
     pub frametime_ms: f32,
     pub vertices: u32,
     pub draw_calls: u32,
     pub frametimes_seconds: &'a [f32],
+}
+
+/// Values the in-game HUD needs. Built by the renderer each frame from
+/// [`crate::game::GameState`] and the active [`crate::game::GameConfig`].
+pub struct HudInfo<'a> {
+    pub weapon: &'a str,
+    pub health: u32,
+    pub armor: u32,
+    pub ammo: u32,
+    pub ammo_max: u32,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -28,6 +48,7 @@ pub struct PauseUi {
     input: EguiWinitState,
     painter: EguiRenderer,
     tab: Tab,
+    crosshair: Option<egui::TextureHandle>,
 }
 
 impl PauseUi {
@@ -39,6 +60,8 @@ impl PauseUi {
         let context = Context::default();
         context.set_zoom_factor(1.5);
         context.set_visuals(egui::Visuals::dark());
+        install_fonts(&context);
+        let crosshair = load_crosshair(&context);
         let input = EguiWinitState::new(
             context.clone(),
             ViewportId::ROOT,
@@ -53,6 +76,7 @@ impl PauseUi {
             input,
             painter,
             tab: Tab::Pause,
+            crosshair,
         }
     }
 
@@ -70,19 +94,17 @@ impl PauseUi {
         paused: bool,
         debug_enabled: bool,
         debug: &DebugInfo<'_>,
-        hud: &str,
+        hud: &HudInfo<'_>,
         settings: &mut GraphicsSettings,
         controls: &mut ControlSettings,
         map_path: &mut String,
     ) -> (Vec<wgpu::CommandBuffer>, bool, bool) {
-        if !paused && !debug_enabled && hud.is_empty() {
-            return (Vec::new(), false, false);
-        }
         let previous_tab = self.tab;
         let previous_map_path = map_path.clone();
         let previous_sensitivity = controls.mouse_sensitivity;
         let raw_input = self.input.take_egui_input(window);
         let mut resume = false;
+        let crosshair = self.crosshair.as_ref();
         let output = self.context.run(raw_input, |ctx| {
             if paused {
                 egui::Window::new("Paused")
@@ -115,19 +137,8 @@ impl PauseUi {
             if debug_enabled {
                 debug_panel(ctx, debug);
             }
-            if !hud.is_empty() && !paused {
-                egui::Area::new("game_hud".into())
-                    .anchor(Align2::RIGHT_BOTTOM, egui::vec2(-16.0, -14.0))
-                    .interactable(false)
-                    .show(ctx, |ui| {
-                        egui::Frame::default()
-                            .fill(egui::Color32::from_black_alpha(170))
-                            .inner_margin(egui::Margin::symmetric(12, 8))
-                            .corner_radius(5.0)
-                            .show(ui, |ui| {
-                                ui.label(egui::RichText::new(hud).color(egui::Color32::WHITE));
-                            });
-                    });
+            if !paused {
+                game_hud(ctx, hud, crosshair);
             }
         });
         self.input
@@ -149,7 +160,7 @@ impl PauseUi {
                 .update_buffers(device, queue, encoder, &paint_jobs, &screen);
         {
             let pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("egui pause menu"),
+                label: Some("egui overlay HUD and menus"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: surface_view,
                     resolve_target: None,
@@ -288,4 +299,230 @@ fn graphics_panel(ui: &mut egui::Ui, settings: &mut GraphicsSettings) {
     }
     ui.add(egui::Slider::new(&mut settings.vignette_strength, 0.0..=1.0).text("Vignette"));
     ui.add(egui::Slider::new(&mut settings.exposure, 0.1..=3.0).text("ACES exposure"));
+
+    ui.separator();
+    ui.checkbox(
+        &mut settings.eye_adaptation_enabled,
+        "Eye adaptation (auto exposure)",
+    );
+    if settings.eye_adaptation_enabled {
+        ui.add(
+            egui::Slider::new(&mut settings.eye_adaptation_speed, 0.1..=10.0)
+                .text("Adaptation speed")
+                .step_by(0.1),
+        );
+        ui.add(
+            egui::Slider::new(&mut settings.eye_adaptation_key, 0.02..=1.0)
+                .text("Brightness key")
+                .step_by(0.01),
+        );
+        ui.add(
+            egui::Slider::new(&mut settings.eye_adaptation_min_exposure, 0.05..=1.0)
+                .text("Minimum exposure")
+                .step_by(0.05),
+        );
+        ui.add(
+            egui::Slider::new(&mut settings.eye_adaptation_max_exposure, 0.5..=8.0)
+                .text("Maximum exposure")
+                .step_by(0.1),
+        );
+    }
+
+    ui.separator();
+    ui.checkbox(&mut settings.bloom_enabled, "Multi-pass blit bloom");
+    if settings.bloom_enabled {
+        ui.add(
+            egui::Slider::new(&mut settings.bloom_intensity, 0.0..=3.0)
+                .text("Bloom intensity")
+                .step_by(0.05),
+        );
+        ui.add(
+            egui::Slider::new(&mut settings.bloom_passes, 1..=8)
+                .text("Bloom passes")
+                .step_by(1.0),
+        );
+        ui.add(
+            egui::Slider::new(&mut settings.bloom_radius, 0.5..=4.0)
+                .text("Blur radius multiplier")
+                .step_by(0.05),
+        );
+        ui.add(
+            egui::Slider::new(&mut settings.bloom_saturation, 1.0..=2.0)
+                .text("Bloom saturation")
+                .step_by(0.05),
+        );
+        ui.checkbox(&mut settings.lens_dirt_enabled, "Lens dirt");
+        if settings.lens_dirt_enabled {
+            ui.add(
+                egui::Slider::new(&mut settings.lens_dirt_intensity, 0.0..=3.0)
+                    .text("Lens dirt intensity")
+                    .step_by(0.05),
+            );
+        }
+    }
+}
+
+/// Registers the shipped pixel and monospace faces. Gouranga drives the large
+/// HUD text, FiraCode the secondary one; harmless fallbacks keep the UI usable
+/// if a font file is missing.
+fn install_fonts(context: &Context) {
+    let mut fonts = egui::FontDefinitions::default();
+    match std::fs::read(PIXEL_FONT_PATH) {
+        Ok(bytes) => {
+            fonts.font_data.insert(
+                "gouranga".to_owned(),
+                std::sync::Arc::new(egui::FontData::from_owned(bytes)),
+            );
+            fonts
+                .families
+                .insert(pixel_family(), vec!["gouranga".to_owned()]);
+        }
+        Err(error) => {
+            eprintln!("Could not read {PIXEL_FONT_PATH}: {error}; using the default font");
+            if let Some(fallback) = fonts.families.get(&egui::FontFamily::Proportional).cloned() {
+                fonts.families.insert(pixel_family(), fallback);
+            }
+        }
+    }
+    match std::fs::read(SECONDARY_FONT_PATH) {
+        Ok(bytes) => {
+            fonts.font_data.insert(
+                "fira".to_owned(),
+                std::sync::Arc::new(egui::FontData::from_owned(bytes)),
+            );
+            fonts
+                .families
+                .entry(egui::FontFamily::Monospace)
+                .or_default()
+                .insert(0, "fira".to_owned());
+        }
+        Err(error) => {
+            eprintln!("Could not read {SECONDARY_FONT_PATH}: {error}; using the default font");
+        }
+    }
+    context.set_fonts(fonts);
+}
+
+fn pixel_family() -> egui::FontFamily {
+    egui::FontFamily::Name("pixel".into())
+}
+
+fn pixel_font(size: f32) -> egui::FontId {
+    egui::FontId::new(size, pixel_family())
+}
+
+fn secondary_font(size: f32) -> egui::FontId {
+    egui::FontId::new(size, egui::FontFamily::Monospace)
+}
+
+fn load_crosshair(context: &Context) -> Option<egui::TextureHandle> {
+    let bytes = match std::fs::read(CROSSHAIR_PATH) {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            eprintln!("Could not read {CROSSHAIR_PATH}: {error}");
+            return None;
+        }
+    };
+    let image = match image::load_from_memory(&bytes) {
+        Ok(image) => image,
+        Err(error) => {
+            eprintln!("Could not decode {CROSSHAIR_PATH}: {error}");
+            return None;
+        }
+    };
+    let rgba = image.to_rgba8();
+    let size = [rgba.width() as usize, rgba.height() as usize];
+    let color = egui::ColorImage::from_rgba_unmultiplied(size, rgba.as_raw());
+    Some(context.load_texture("hud_crosshair", color, egui::TextureOptions::NEAREST))
+}
+
+fn panel_frame() -> egui::Frame {
+    egui::Frame::default()
+        .fill(HUD_PANEL)
+        .inner_margin(egui::Margin::symmetric(12, 7))
+        .corner_radius(7.0)
+}
+
+fn stat_panel(ui: &mut egui::Ui, label: &str, value: u32) {
+    panel_frame().show(ui, |ui| {
+        ui.vertical(|ui| {
+            ui.label(
+                egui::RichText::new(label)
+                    .font(secondary_font(9.0))
+                    .color(HUD_LABEL),
+            );
+            ui.label(
+                egui::RichText::new(value.to_string())
+                    .font(pixel_font(30.0))
+                    .color(HUD_YELLOW),
+            );
+        });
+    });
+}
+
+/// Draws the gameplay overlay: weapon name top-right, vitals bottom-left,
+/// ammunition bottom-right and the crosshair centred.
+fn game_hud(ctx: &Context, hud: &HudInfo<'_>, crosshair: Option<&egui::TextureHandle>) {
+    egui::Area::new("hud_weapon".into())
+        .anchor(Align2::RIGHT_TOP, egui::vec2(-24.0, 20.0))
+        .interactable(false)
+        .show(ctx, |ui| {
+            ui.label(
+                egui::RichText::new(hud.weapon)
+                    .font(secondary_font(16.0))
+                    .color(HUD_YELLOW),
+            );
+        });
+
+    egui::Area::new("hud_vitals".into())
+        .anchor(Align2::LEFT_BOTTOM, egui::vec2(28.0, -24.0))
+        .interactable(false)
+        .show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                stat_panel(ui, "HEALTH", hud.health);
+                ui.add_space(12.0);
+                stat_panel(ui, "ARMOR", hud.armor);
+            });
+        });
+
+    egui::Area::new("hud_ammo".into())
+        .anchor(Align2::RIGHT_BOTTOM, egui::vec2(-28.0, -24.0))
+        .interactable(false)
+        .show(ctx, |ui| {
+            panel_frame().show(ui, |ui| {
+                let large = pixel_font(30.0);
+                let small = secondary_font(15.0);
+                // Nudge the reserve number down so its baseline matches the big
+                // number. Doing it with a spacer keeps the panel sized to its
+                // content instead of stretching to the available height.
+                let baseline_shift = (ui.fonts(|fonts| fonts.row_height(&large))
+                    - ui.fonts(|fonts| fonts.row_height(&small)))
+                .max(0.0);
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new(hud.ammo.to_string())
+                            .font(large)
+                            .color(HUD_YELLOW),
+                    );
+                    ui.add_space(9.0);
+                    ui.vertical(|ui| {
+                        ui.add_space(baseline_shift);
+                        ui.label(
+                            egui::RichText::new(hud.ammo_max.to_string())
+                                .font(small)
+                                .color(HUD_SECONDARY),
+                        );
+                    });
+                });
+            });
+        });
+
+    if let Some(crosshair) = crosshair {
+        egui::Area::new("hud_crosshair".into())
+            .anchor(Align2::CENTER_CENTER, egui::Vec2::ZERO)
+            .interactable(false)
+            .show(ctx, |ui| {
+                ui.add(egui::Image::new(crosshair));
+            });
+    }
 }

@@ -11,6 +11,13 @@ pub struct RenderPipelines {
     pub ssao_blur: wgpu::RenderPipeline,
     pub lighting_layout: wgpu::BindGroupLayout,
     pub lighting: wgpu::RenderPipeline,
+    pub bloom_layout: wgpu::BindGroupLayout,
+    pub bloom_prefilter: wgpu::RenderPipeline,
+    pub bloom_downsample: wgpu::RenderPipeline,
+    pub bloom_upsample: wgpu::RenderPipeline,
+    pub luminance: wgpu::RenderPipeline,
+    pub adaptation_layout: wgpu::BindGroupLayout,
+    pub adaptation: wgpu::RenderPipeline,
     pub post_layout: wgpu::BindGroupLayout,
     pub post: wgpu::RenderPipeline,
 }
@@ -76,6 +83,7 @@ pub fn create(device: &wgpu::Device, surface_format: wgpu::TextureFormat) -> Ren
         "fs_ssao",
         &ssao_layout,
         wgpu::TextureFormat::R8Unorm,
+        None,
     );
 
     let ssao_blur_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -95,6 +103,7 @@ pub fn create(device: &wgpu::Device, surface_format: wgpu::TextureFormat) -> Ren
         "fs_blur",
         &ssao_blur_layout,
         wgpu::TextureFormat::R8Unorm,
+        None,
     );
 
     let lighting_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -122,7 +131,76 @@ pub fn create(device: &wgpu::Device, surface_format: wgpu::TextureFormat) -> Ren
         include_str!("lighting.wgsl"),
         "fs_lighting",
         &lighting_layout,
-        wgpu::TextureFormat::Rgba32Float,
+        wgpu::TextureFormat::Rgba16Float,
+        None,
+    );
+
+    let bloom_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("bloom and luminance inputs"),
+        entries: &[
+            uniform_entry(0, wgpu::ShaderStages::FRAGMENT),
+            texture_entry(1, wgpu::TextureViewDimension::D2, true),
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+        ],
+    });
+    let bloom_prefilter = fullscreen_pipeline(
+        device,
+        "soft-threshold bloom prefilter",
+        include_str!("bloom.wgsl"),
+        "fs_prefilter",
+        &bloom_layout,
+        wgpu::TextureFormat::Rgba16Float,
+        None,
+    );
+    let bloom_downsample = fullscreen_pipeline(
+        device,
+        "bloom downsample blit",
+        include_str!("bloom.wgsl"),
+        "fs_downsample",
+        &bloom_layout,
+        wgpu::TextureFormat::Rgba16Float,
+        None,
+    );
+    let bloom_upsample = fullscreen_pipeline(
+        device,
+        "bloom additive upsample blit",
+        include_str!("bloom.wgsl"),
+        "fs_upsample",
+        &bloom_layout,
+        wgpu::TextureFormat::Rgba16Float,
+        Some(additive_blend()),
+    );
+    let luminance = fullscreen_pipeline(
+        device,
+        "average luminance downsample",
+        include_str!("luminance.wgsl"),
+        "fs_luminance",
+        &bloom_layout,
+        wgpu::TextureFormat::Rgba16Float,
+        None,
+    );
+
+    let adaptation_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("eye adaptation inputs"),
+        entries: &[
+            uniform_entry(0, wgpu::ShaderStages::FRAGMENT),
+            texture_entry(1, wgpu::TextureViewDimension::D2, false),
+            texture_entry(2, wgpu::TextureViewDimension::D2, false),
+        ],
+    });
+    let adaptation = fullscreen_pipeline(
+        device,
+        "temporal eye adaptation",
+        include_str!("adaptation.wgsl"),
+        "fs_adapt",
+        &adaptation_layout,
+        wgpu::TextureFormat::Rgba16Float,
+        None,
     );
 
     let post_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -130,15 +208,25 @@ pub fn create(device: &wgpu::Device, surface_format: wgpu::TextureFormat) -> Ren
         entries: &[
             uniform_entry(0, wgpu::ShaderStages::FRAGMENT),
             texture_entry(1, wgpu::TextureViewDimension::D2, false),
+            texture_entry(2, wgpu::TextureViewDimension::D2, true),
+            wgpu::BindGroupLayoutEntry {
+                binding: 3,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+            texture_entry(4, wgpu::TextureViewDimension::D2, true),
+            texture_entry(5, wgpu::TextureViewDimension::D2, false),
         ],
     });
     let post = fullscreen_pipeline(
         device,
-        "ACES and vignette post processing",
+        "bloom composite, eye adaptation, ACES and vignette",
         include_str!("post.wgsl"),
         "fs_post",
         &post_layout,
         surface_format,
+        None,
     );
 
     RenderPipelines {
@@ -152,6 +240,13 @@ pub fn create(device: &wgpu::Device, surface_format: wgpu::TextureFormat) -> Ren
         ssao_blur,
         lighting_layout,
         lighting,
+        bloom_layout,
+        bloom_prefilter,
+        bloom_downsample,
+        bloom_upsample,
+        luminance,
+        adaptation_layout,
+        adaptation,
         post_layout,
         post,
     }
@@ -276,6 +371,7 @@ fn fullscreen_pipeline(
     fragment_entry: &str,
     bind_layout: &wgpu::BindGroupLayout,
     format: wgpu::TextureFormat,
+    blend: Option<wgpu::BlendState>,
 ) -> wgpu::RenderPipeline {
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some(label),
@@ -299,7 +395,11 @@ fn fullscreen_pipeline(
             module: &shader,
             entry_point: Some(fragment_entry),
             compilation_options: Default::default(),
-            targets: &[Some(color_target(format))],
+            targets: &[Some(wgpu::ColorTargetState {
+                format,
+                blend,
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
         }),
         primitive: wgpu::PrimitiveState {
             topology: wgpu::PrimitiveTopology::TriangleList,
@@ -313,6 +413,21 @@ fn fullscreen_pipeline(
     })
 }
 
+fn additive_blend() -> wgpu::BlendState {
+    wgpu::BlendState {
+        color: wgpu::BlendComponent {
+            src_factor: wgpu::BlendFactor::One,
+            dst_factor: wgpu::BlendFactor::One,
+            operation: wgpu::BlendOperation::Add,
+        },
+        alpha: wgpu::BlendComponent {
+            src_factor: wgpu::BlendFactor::One,
+            dst_factor: wgpu::BlendFactor::One,
+            operation: wgpu::BlendOperation::Add,
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -323,6 +438,9 @@ mod tests {
             include_str!("ssao.wgsl"),
             include_str!("ssao_blur.wgsl"),
             include_str!("lighting.wgsl"),
+            include_str!("bloom.wgsl"),
+            include_str!("luminance.wgsl"),
+            include_str!("adaptation.wgsl"),
             include_str!("post.wgsl"),
         ] {
             let module = naga::front::wgsl::parse_str(source).expect("WGSL should parse");

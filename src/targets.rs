@@ -73,25 +73,57 @@ impl PingPong {
 }
 
 /// Everything extracted from the G-buffer: the HDR ping-pong chain used by
-/// deferred lighting and composition, the viewmodel overlay depth, and the
-/// single-channel SSAO buffers.
+/// deferred lighting and composition, the viewmodel overlay depth, the
+/// single-channel SSAO buffers and the eye-adaptation/bloom working set.
 pub struct PostProcess {
     pub ping_pong: PingPong,
     pub viewmodel_depth: TextureTarget,
     pub ssao_raw: TextureTarget,
     pub ssao: TextureTarget,
+    /// Half-resolution bloom chain: level 0 is 1/2, level k is 1/2^(k+1) down
+    /// to a minimum of one texel. The first `bloom_passes` levels are used.
+    pub bloom_mips: Vec<TextureTarget>,
+    /// Small downsample of the HDR buffer used to estimate average luminance.
+    pub luminance: TextureTarget,
+    /// One-pixel ping-pong holding the temporally adapted exposure.
+    pub adaptation: [TextureTarget; 2],
 }
 
 impl PostProcess {
     pub fn new(device: &wgpu::Device, width: u32, height: u32) -> Self {
+        let mut bloom_mips = Vec::with_capacity(MAX_BLOOM_MIPS);
+        let mut mip_width = (width / 2).max(1);
+        let mut mip_height = (height / 2).max(1);
+        for _ in 0..MAX_BLOOM_MIPS {
+            bloom_mips.push(bloom_target(device, "bloom mip", mip_width, mip_height));
+            mip_width = (mip_width / 2).max(1);
+            mip_height = (mip_height / 2).max(1);
+        }
         Self {
             ping_pong: PingPong::new(device, width, height),
             viewmodel_depth: depth_target(device, "viewmodel overlay depth", width, height),
             ssao_raw: ssao_target(device, "raw normal-oriented hemisphere SSAO", width, height),
             ssao: ssao_target(device, "bilaterally blurred SSAO", width, height),
+            bloom_mips,
+            luminance: bloom_target(
+                device,
+                "average luminance downsample",
+                LUMINANCE_SIZE,
+                LUMINANCE_SIZE,
+            ),
+            adaptation: [
+                bloom_target(device, "eye adaptation A", 1, 1),
+                bloom_target(device, "eye adaptation B", 1, 1),
+            ],
         }
     }
 }
+
+/// Number of half-resolution bloom levels the chain can hold. The user-facing
+/// pass count is clamped to this.
+pub const MAX_BLOOM_MIPS: usize = 8;
+/// Edge length of the small luminance-downsample buffer.
+pub const LUMINANCE_SIZE: u32 = 64;
 
 pub fn shadow_target(device: &wgpu::Device, resolution: u32) -> TextureTarget {
     depth_target(device, "directional sun shadow map", resolution, resolution)
@@ -107,13 +139,15 @@ pub fn shadow_moments_target(device: &wgpu::Device, resolution: u32) -> TextureT
     )
 }
 
+/// The lit HDR buffer. `Rgba16Float` is filterable on every WebGPU device, which
+/// the bloom and luminance passes rely on when they sample it bilinearly.
 fn hdr_target(device: &wgpu::Device, label: &str, width: u32, height: u32) -> TextureTarget {
     render_target(
         device,
         label,
         width,
         height,
-        wgpu::TextureFormat::Rgba32Float,
+        wgpu::TextureFormat::Rgba16Float,
     )
 }
 
@@ -121,6 +155,18 @@ fn hdr_target(device: &wgpu::Device, label: &str, width: u32, height: u32) -> Te
 /// buffers use a compact `R8Unorm` target instead of a full HDR one.
 fn ssao_target(device: &wgpu::Device, label: &str, width: u32, height: u32) -> TextureTarget {
     render_target(device, label, width, height, wgpu::TextureFormat::R8Unorm)
+}
+
+/// Bloom and its intermediate mips are filtered while compositing, so they use
+/// a filterable half-float format instead of the full-precision ping-pong HDR.
+fn bloom_target(device: &wgpu::Device, label: &str, width: u32, height: u32) -> TextureTarget {
+    render_target(
+        device,
+        label,
+        width,
+        height,
+        wgpu::TextureFormat::Rgba16Float,
+    )
 }
 
 fn render_target(

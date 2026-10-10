@@ -1,35 +1,33 @@
-struct Uniforms {
-    view_projection: mat4x4<f32>,
-    inverse_view_projection: mat4x4<f32>,
-    light_view_projection: mat4x4<f32>,
-    model: mat4x4<f32>,
-    view_model: mat4x4<f32>,
-    camera_position: vec4<f32>,
-    sun_direction: vec4<f32>,
-    sun_color_intensity: vec4<f32>,
-    point_positions_radius: array<vec4<f32>, 2>,
-    point_colors_intensity: array<vec4<f32>, 2>,
-    ssao_params: vec4<f32>,
-    shadow_params: vec4<f32>,
+struct PostUniforms {
+    bloom: vec4<f32>,
+    bloom_extra: vec4<f32>,
     effects: vec4<f32>,
+    adaptation: vec4<f32>,
 };
 
-@group(0) @binding(0) var<uniform> uniforms: Uniforms;
+@group(0) @binding(0) var<uniform> post: PostUniforms;
 @group(0) @binding(1) var hdr_texture: texture_2d<f32>;
+@group(0) @binding(2) var bloom_texture: texture_2d<f32>;
+@group(0) @binding(3) var post_sampler: sampler;
+@group(0) @binding(4) var lens_dirt_texture: texture_2d<f32>;
+@group(0) @binding(5) var adaptation_texture: texture_2d<f32>;
 
 struct FullscreenOutput {
     @builtin(position) position: vec4<f32>,
+    @location(0) uv: vec2<f32>,
 };
 
 @vertex
 fn vs_fullscreen(@builtin(vertex_index) index: u32) -> FullscreenOutput {
-    var positions = array<vec2<f32>, 3>(
+    let positions = array<vec2<f32>, 3>(
         vec2<f32>(-1.0, -1.0),
         vec2<f32>(3.0, -1.0),
         vec2<f32>(-1.0, 3.0)
     );
     var output: FullscreenOutput;
-    output.position = vec4<f32>(positions[index], 0.0, 1.0);
+    let position = positions[index];
+    output.position = vec4<f32>(position, 0.0, 1.0);
+    output.uv = vec2<f32>(position.x * 0.5 + 0.5, 0.5 - position.y * 0.5);
     return output;
 }
 
@@ -46,10 +44,27 @@ fn aces_fitted(color: vec3<f32>) -> vec3<f32> {
 fn fs_post(input: FullscreenOutput) -> @location(0) vec4<f32> {
     let size = vec2<i32>(textureDimensions(hdr_texture));
     let pixel = clamp(vec2<i32>(input.position.xy), vec2<i32>(0), size - vec2<i32>(1));
-    var color = textureLoad(hdr_texture, pixel, 0).rgb * uniforms.effects.y;
+    var color = textureLoad(hdr_texture, pixel, 0).rgb;
+
+    let bloom_sample = textureSample(bloom_texture, post_sampler, input.uv).rgb;
+    color += bloom_sample * post.bloom.x;
+    if (post.bloom_extra.y > 0.0) {
+        // Lens dirt is added on top of the bloom instead of masking it, so the
+        // dust only brightens its own specks and never carves a dark halo around
+        // glowing areas. `bloom_extra.w` normalises the mask to a mean of one.
+        let dirt = textureSample(lens_dirt_texture, post_sampler, input.uv).rgb * post.bloom_extra.w;
+        color += dirt * bloom_sample * post.bloom_extra.y;
+    }
+
+    var exposure = post.effects.y;
+    if (post.bloom_extra.z > 0.5) {
+        exposure *= textureLoad(adaptation_texture, vec2<i32>(0, 0), 0).r;
+    }
+    color *= exposure;
+
     let uv = (vec2<f32>(pixel) + vec2<f32>(0.5)) / vec2<f32>(size);
     let centered = (uv - vec2<f32>(0.5)) * vec2<f32>(1.0, f32(size.y) / f32(size.x));
-    let vignette = 1.0 - uniforms.effects.x * smoothstep(0.2, 0.72, length(centered));
+    let vignette = 1.0 - post.effects.x * smoothstep(0.2, 0.72, length(centered));
     color = aces_fitted(color * vignette);
     return vec4<f32>(color, 1.0);
 }

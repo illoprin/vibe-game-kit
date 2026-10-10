@@ -41,6 +41,22 @@ pub struct Uniforms {
     pub effects: [f32; 4],
 }
 
+/// Per-frame parameters for the screen-space chain (bloom, eye adaptation and
+/// the final composite). Kept separate from [`Uniforms`] so the geometry and
+/// lighting shaders never have to change when a post effect gains a knob.
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct PostUniforms {
+    /// bloom intensity, blur radius multiplier, soft threshold, soft knee.
+    pub bloom: [f32; 4],
+    /// bloom saturation, lens dirt amount, eye adaptation enabled, unused.
+    pub bloom_extra: [f32; 4],
+    /// vignette strength, manual exposure, eye adaptation key, adaptation speed.
+    pub effects: [f32; 4],
+    /// minimum exposure, maximum exposure, delta time, unused.
+    pub adaptation: [f32; 4],
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct Aabb {
     pub min: Vec3,

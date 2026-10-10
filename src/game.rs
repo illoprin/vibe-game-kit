@@ -489,15 +489,12 @@ impl GameState {
             .unwrap_or(0)
     }
 
-    pub fn hud_text(&self, config: &GameConfig) -> String {
-        format!(
-            "{}  |  Ammo: {} / {}  |  HP: {}  Armor: {}",
-            config.weapons[&self.selected_weapon].name,
-            self.selected_ammunition(),
-            config.weapons[&self.selected_weapon].ammunition.max,
-            self.health,
-            self.armor
-        )
+    pub fn selected_weapon_name<'a>(&self, config: &'a GameConfig) -> &'a str {
+        &config.weapons[&self.selected_weapon].name
+    }
+
+    pub fn selected_weapon_max(&self, config: &GameConfig) -> u32 {
+        config.weapons[&self.selected_weapon].ammunition.max
     }
 
     pub fn pickup_model_transform(pickup: &WorldPickup) -> Mat4 {
