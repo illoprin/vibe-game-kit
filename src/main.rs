@@ -43,7 +43,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                 app_settings.map_path = arguments.next().ok_or("--map requires a map path")?;
             }
             "--help" | "-h" => {
-                println!("Usage: webgpu-cube [game.toml] [--game <game.toml>] [--map <map file>]");
+                println!(
+                    "Usage: vibe-game-kit [game.toml] [--game <game.toml>] [--map <map file>]"
+                );
                 return Ok(());
             }
             positional if !positional.starts_with('-') => {

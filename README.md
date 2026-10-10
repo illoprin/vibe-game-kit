@@ -1,51 +1,110 @@
-# OGK Concrete Yard
+<p align="center">
+  <img src="img/logo.png" alt="Vibe Game Kit logo" width="112">
+</p>
 
-Небольшая FPS-сцена на Rust + `wgpu`. По умолчанию загружается `assets/map/map1.map`: площадка 30×30 с бетонными барьерами, ящиками, платформами, ступенями и pickup-предметами. Начальное оружие и его viewmodel задаются в `game.toml`; пример использует детальный карабин из `assets/carbine.json` с текстурами `gunmetal.ppm` и `walnut.ppm`.
+<h1 align="center">VIBE GAME KIT</h1>
 
-## Запуск
+<p align="center">
+  <strong>A little FPS world. A lot of room to experiment.</strong><br>
+  A configurable, blocky FPS sandbox and rendering playground built with Rust, wgpu, and egui.
+</p>
+
+<p align="center">
+  <a href="README.md">English</a> &nbsp;·&nbsp; <a href="README.ru.md">Русский</a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Rust-2021-CE422B?style=flat-square&logo=rust&logoColor=white" alt="Rust 2021">
+  <img src="https://img.shields.io/badge/Graphics-wgpu_24-6E56CF?style=flat-square" alt="wgpu 24">
+  <img src="https://img.shields.io/badge/UI-egui-00A98F?style=flat-square" alt="egui">
+</p>
+
+<br>
+
+<p align="center">
+  <img src="img/f1.gif" alt="Debug view with frame-time graph and collision outlines" width="100%">
+</p>
+
+## The short version
+
+Vibe Game Kit is a native first-person playground for building and tuning a small game world. Walk a concrete test range, pick up weapons, tune the rendering pipeline, and edit the world in plain text files. The project keeps the pieces visible: maps, models, materials, gameplay settings, and graphics options are all yours to change.
+
+| **Play** | **Build** | **Tune** |
+|:--|:--|:--|
+| Smooth movement, jumping, pickups, weapon switching, firing, and recoil | `.map` levels, OBJ props, Minecraft-style JSON models, tiny PPM textures | Deferred lighting, shadows, SSAO, bloom, eye adaptation, and render scale |
+
+## See it in motion
+
+<p align="center">
+  <img src="img/f2.gif" alt="Debug view with frame-time graph and collision outlines" width="100%">
+</p>
+
+<p align="center">
+  <img src="img/img1.webp" alt="Vibe Game Kit — first-person view in the Concrete Yard test map" width="100%">
+</p>
+
+<p align="center">
+  <img src="img/img2.webp" alt="Debug view with frame-time graph and collision outlines" width="100%">
+</p>
+
+The optional debug view overlays collision bounds and a live frame-time graph—handy while iterating on a level.
+
+## Get started
+
+You’ll need a working [Rust toolchain](https://www.rust-lang.org/tools/install) and a graphics adapter supported by wgpu. From the project root, run:
 
 ```sh
 cargo run --release
 ```
 
-По умолчанию читается `game.toml`. Другую игру можно указать через `cargo run --release -- --game games/blue/game.toml` (или первым позиционным аргументом). Карту можно переопределить через `--map maps/another.map`; иначе используется путь из `settings.toml`.
+The default launch loads `game.toml` and the map configured in `settings.toml` (`assets/map/map1.map`). To load another game or map:
 
-## Управление
+```sh
+cargo run --release -- --game games/blue/game.toml --map maps/night-yard.map
+```
 
-- Клик по окну — захват мыши; движение мышью — обзор.
-- `W` / `A` / `S` / `D` — плавно ускоряющееся движение; при прыжке управление направлением отключается.
-- `Shift` — бег с плавным увеличением FOV на 12°; камера и оружие плавно следуют за движением.
-- `Space` — прыжок; удержание клавиши включает автопрыжок при приземлении. В воздухе WASD/Shift не дают ускорения, но поворот мышью меняет направление текущей инерции. Низкие ступени (до ¼ роста игрока) преодолеваются автоматически.
-- `1`–`9` / колесо мыши — выбрать доступное оружие; `ЛКМ` — стрелять (автоматическое оружие стреляет при удержании).
-- `F1` — показать/скрыть debug-панель: FPS, график frametime за последние 10 секунд, vertices и draw calls; одновременно отображаются коллайдеры статических объектов и pickups.
-- `F2` — сохранить скриншот текущего кадра (вместе с HUD) в папку `./screenshots` как PNG с меткой времени; папка создаётся автоматически.
-- Игровой HUD нарисован средствами egui: имя оружия сверху справа, здоровье и броня снизу слева, патроны (текущие/запас) снизу справа, прицел `assets/ui/crosshair.png` по центру. Крупный шрифт — `assets/ui/GourangaPixel.ttf`, вторичный — `assets/ui/FiraCode.ttf` (с откатом на встроенный при отсутствии файла).
-- `Esc` — открыть/закрыть меню паузы; `Resume` возвращает в игру.
-- Во вкладке `Controls` меню паузы настраивается чувствительность мыши.
-- Во вкладке `Graphics` меню паузы настраиваются внутренний render scale, разрешение shadow map, фильтр теней (PCF/VSM), SSAO, vignette, экспозиция ACES, eye adaptation (checkbox + скорость/ключ/min/max exposure) и multi-pass blit bloom (checkbox + интенсивность/число проходов/радиус/насыщенность + lens dirt).
-- Настройки графики, управления и путь карты хранятся в `settings.toml`: изменения сохраняются при выходе из меню/смене вкладки. Путь карты применяется при следующем запуске; аргумент командной строки имеет приоритет.
+`--game` can also be written as the first positional argument; `--map` overrides the map path for this launch. On Windows, the application icon is embedded in the executable during the build.
 
-## Конфигурация игры `game.toml`
+## Controls
 
-Каждая игра задаёт собственное имя, модели аптечки/брони и набор оружия. Карта должна содержать такое же имя в обязательной директиве `GAME`; при несовпадении игра останавливает загрузку с ошибкой. Пути моделей разрешаются относительно `game.toml`, текстуры JSON-моделей — относительно самих JSON-файлов.
+| Input | Action |
+|:--|:--|
+| Click the window | Capture the mouse; move the mouse to look |
+| `W` `A` `S` `D` | Move |
+| `Shift` | Sprint; FOV widens smoothly |
+| `Space` | Jump; hold to auto-jump on landing |
+| `1`–`9` / mouse wheel | Select an available weapon |
+| Left mouse button | Fire; automatic weapons keep firing while held |
+| `F1` | Toggle debug overlay: FPS, frame-time graph, draw calls, and collision bounds |
+| `F2` | Save a full-resolution PNG screenshot, including the HUD, to `screenshots/` |
+| `Esc` | Open or close the pause menu |
+
+The pause menu includes **Controls** (mouse sensitivity) and **Graphics** settings. Render scale, shadow quality, SSAO, bloom, exposure, eye adaptation, lens dirt, and vignette can be adjusted while playing.
+
+
+## Make it yours
+
+### Game setup — `game.toml`
+
+Each game file defines a game name, pickup models, and a keyed collection of weapons. The map’s `GAME` directive must match the configured name. Asset paths are resolved relative to their owning config or model file.
 
 ```toml
 name = "default"
 
 [pickups]
-aid_model = "assets/aid_kit_item.json"
-armor_model = "assets/armor_item.json"
+aid_model = "assets/pickups/aid_kit_item.json"
+armor_model = "assets/pickups/armor_item.json"
 
 [weapons.carbine]
-name = "Карабин Автомат"
-model_path = "assets/carbine.json"
+name = "Assault Rifle"
+model_path = "assets/weapons/carbine.json"
 fpv_offset = [0.24, -0.19, 0.45]
 bullets_per_shot = 1
 fire_rate = 10.0
 max_spread = 0.02
 
 [weapons.carbine.ammunition]
-model_path = "assets/carbine_ammo.json"
+model_path = "assets/weapons/carbine_ammo.json"
 amount = 60
 max = 240
 
@@ -58,60 +117,58 @@ snappiness = 25.0
 return_speed = 8.0
 ```
 
-Для каждого оружия указываются viewmodel, положение FPV, число лучей на выстрел, темп стрельбы, разброс, параметры патронов и отдачи. Патроны тратятся по одному на нажатие/выстрел независимо от числа дробин. При старте игрок получает первое оружие из списка и полный боезапас; остальные открываются pickup'ами. Аптечка и броня восстанавливают по 50 единиц, максимум — 100.
+Weapon entries also support recoil tuning. Add more `[weapons.<key>]` sections to define additional weapons; place weapon, ammo, health, and armor pickups in the map.
 
-Модели предметов поставляются как редактируемые JSON: аптечка — это объёмный медицинский крест (красный корпус в светлой окантовке), броня — металлический heater-щит с латунным крестом и навершием. Дробовик `assets/shotgun.json` — горизонтальная двустволка средней длины: две рядом расположенные трубы с мушкой, деревянное цевьё под стволами, бронзовый ресивер с рычагом, двумя курками и спуском, и ореховый приклад. Текстуры (`aid_texture.ppm`, `armor_texture.ppm`, `armor_trim.ppm`, `shotgun_metal.ppm`, `shotgun_action.ppm`, `shotgun_stock.ppm`) лежат рядом с моделями и задают палитру.
+### Levels — `.map`
 
-Отсутствующие ассеты не прерывают загрузку: если текстура не найдена или повреждена, вместо неё подставляется шахматная текстура `#d11bb6`/`#991185`, а несуществующая или нечитаемая модель заменяется кубом `-1..1` с этой же текстурой.
-
-## Текстовый формат `.map`
-
-Файл — UTF-8 текст, `#` начинает комментарий. Пути к текстурам и моделям задаются относительно файла карты.
+Maps are UTF-8 text files. Lines beginning with `#` are comments; material and model paths are relative to the map file.
 
 ```text
 MAP 1
 GAME default
-# пути задаются относительно папки с картой
 material concrete concrete.ppm
 material crate crate.ppm
-material gunmetal gunmetal.ppm
-material walnut walnut.ppm
 floor 30 concrete
 box -1.5 1.0 -4.5 6.0 2.0 0.55 concrete
 model prop.obj 0 0 0 1 crate
-viewmodel carbine.json gunmetal
-# weapon_pickup <weapon-key> <x> <y> <z>
 weapon_pickup shotgun 0.0 0.55 3.0
-# ammo_pickup <weapon-key> <x> <y> <z>
-ammo_pickup carbine 5.5 0.65 4.5
-# item_pickup aid|armor <x> <y> <z>
 item_pickup aid -3.5 0.65 1.2
-# sun <направление-к-солнцу xyz> <линейный-rgb> <интенсивность>
 sun 0.35 0.8 -0.4 1.0 0.93 0.78 2.4
-# point <позиция xyz> <линейный-rgb> <интенсивность> <радиус>
-point -4.0 4.5 2.0 1.0 0.72 0.42 18.0 11.0
-point 4.5 3.8 -5.0 0.45 0.68 1.0 16.0 10.0
 ```
 
-Директивы: `GAME <game.name>` (обязательна), `material <имя> <ppm>`, `floor <размер> <материал>`, `box <x> <y> <z> <ширина> <высота> <глубина> <материал>`, `model <файл.obj|файл.json> <x> <y> <z> <масштаб> <материал>`, `viewmodel <файл.obj|файл.json> <материал>`, `weapon_pickup <weapon-key> <x> <y> <z>`, `ammo_pickup <weapon-key> <x> <y> <z>`, `item_pickup <aid|armor> <x> <y> <z>`, `sun <dx> <dy> <dz> <r> <g> <b> <интенсивность>` и до двух директив `point <x> <y> <z> <r> <g> <b> <интенсивность> <радиус>`. Pickups падают на поверхность, вращаясь вокруг yaw со скоростью π/6 рад/с, и имеют масштаб 0.9 от исходной JSON-модели. Направление солнца задаётся от поверхности к источнику; цвет — в линейном RGB. Материал должен быть объявлен заранее.
+Available directives cover materials, floors, boxes, OBJ/JSON props, a viewmodel, weapon/ammo/item pickups, a directional sun, and up to two point lights. The `GAME` line is required.
 
-## Рендеринг и эффекты
+### Models and textures
 
-- Внутренний render scale (доля от разрешения окна, 25–100%) задаёт разрешение G-buffer и всех экранных эффектов (SSAO, bloom, eye adaptation и др.). Финальная композиция сэмплит HDR-буфер линейным фильтром и апскейлит результат до полного разрешения окна, а HUD и меню egui всегда рисуются в полном разрешении. Настройка меняется на лету в Graphics и сохраняется в `settings.toml`.
-- `F2` копирует готовый кадр (сцена + HUD) из swap-chain в буфер, читает его обратно и сохраняет в `./screenshots/screenshot_<unix-ms>.png`. Формат поверхности конвертируется из BGRA в RGBA по необходимости.
-- Направленный солнечный свет использует shadow mapping с выбором 3×3 PCF или Variance Shadow Maps; разрешение 256, 512, 1024 или 2048 можно менять в меню паузы.
-- Структура `GBuffer` изолирована и хранит ровно три цели рендеринга: HDR-цвет (`RGBA16Float`), мировые нормали (`RGBA16Float`) и глубину сцены. Всё остальное вынесено в конвеер пост-обработки.
-- `PostProcess` владеет всеми экранными буферами: глубиной viewmodel, буферами SSAO, структурой ping-pong из двух HDR-буферов (`RGBA16Float`), цепочкой bloom-мипов (половинное разрешение, до 8 уровней), малым даунсемплом яркости 64×64 и ping-pong из двух 1×1 текстур для eye adaptation; Deferred-освещение пишет в ping-pong, а финальная композиция читает всё это.
-- Два point light из карты освещают G-buffer. Normal-oriented hemisphere SSAO хранится в одном канале `R8Unorm` (raw и bilateral blur — отдельные проходы); глубина viewmodel исключена из AO и фильтра, чтобы оружие не создавало чёрных ореолов. В Graphics можно выключить эффект и менять intensity (0–8) и радиус.
-- Multi-pass blit bloom: bright-pass с soft threshold (порог `1.0`, knee `0.5`) формирует яркое изображение, причём в bright-pass цвет дополнительно насыщается сильнее исходной сцены; затем цепочка downsample/upsample blit'ов сворачивается аддитивно. В Graphics настраиваются интенсивность, число проходов (1–8), множитель радиуса размытия, насыщенность и checkbox.
-- Eye adaptation (авто-экспозиция): логарифмическая средняя яркость кадра сводится в текстуру 64×64, затем целевая экспозиция `key / average` сглаживается во времени в 1×1 ping-pong с настраиваемой скоростью и clamp'ом min/max exposure. Включается checkbox'ом.
-- Lens dirt: необязательный аддитивный вклад из `assets/lens_dirt.png` — к кадру добавляется `lens_dirt * bloom * lens_dirt_intensity` (маска нормализуется к средней яркости 1.0); свечение только добавляется, поэтому вокруг ярких участков не появляется тёмный ореол. Включается checkbox'ом с регулятором интенсивности. Если файла нет, используется нейтральная маска 1×1.
-- Финальный проход собирает bloom (с опциональным lens dirt), применяет eye adaptation и настраиваемую экспозицию, vignette и ACES tone mapping.
+- **OBJ** — positions, UVs, normals, negative indices, and polygon faces are supported; polygons are triangulated. MTL files are not loaded—the map supplies the material.
+- **Minecraft-style JSON** — block-model elements, faces, texture references, and element rotations are supported. Referenced PPM textures are resolved next to the JSON model.
+- **PPM (`P3`)** — small, readable pixel textures up to 32×32 pixels, sampled with nearest-neighbour filtering.
+- **Graceful fallbacks** — missing textures become a magenta checkerboard; missing models become a checkerboard cube instead of aborting the load.
 
-## Модели и текстуры
+### Local settings — `settings.toml`
 
-- `.obj`: вершины `v`, UV `vt`, нормали `vn`, грани `f` (включая отрицательные индексы и полигоны; полигоны триангулируются). `mtl` не загружается — материал модели задаётся в карте.
-- `.json` / Minecraft block-model JSON: `elements` с `from`/`to`, `faces` с `texture`, `textures` и повороты элементов по `axis`/`angle`. Текстуры автоматически ищутся рядом с JSON по имени ресурса (PPM); если подходящего материала ещё нет, он добавляется в общий texture array. Для граней без найденной текстуры используется материал из карты.
-- Используется текстовый PPM (`P3`), изображения должны быть не больше 32×32. Отсутствующая или некорректная текстура заменяется шахматной `#d11bb6`/`#991185` без записи файла; фильтрация nearest.
+Graphics and controls are saved locally, including map path, mouse sensitivity, shadow-map resolution, shadow filter, SSAO, post-processing, and render scale. The render scale ranges from 25% to 100%: scene buffers and screen-space effects render smaller, then upscale to the window. The egui HUD and menus always stay at full window resolution.
 
-Код движка разнесён по небольшим модулям в `src/`: камера/физика, карта/модели, меши, GPU-ресурсы и рендерер.
+## Rendering, at a glance
+
+- **Deferred rendering** with an HDR G-buffer, directional shadow mapping (3×3 PCF or VSM), and map-defined point lights.
+- **SSAO** with a blur pass; the first-person weapon is excluded to avoid halos.
+- **Multi-pass bloom** with configurable passes, radius, intensity, and saturation.
+- **Eye adaptation**, ACES tone mapping, exposure controls, and vignette.
+- **Optional lens dirt** adds bloom detail without dark halos.
+- **Pixel-aware HUD** built with egui, with custom fonts and a crosshair asset.
+- **F2 capture** saves the composited frame—including the HUD—as a timestamped PNG.
+
+## Project layout
+
+```text
+assets/       maps, models, textures, and UI assets
+img/          README artwork and screenshots
+src/          Rust game, renderer, and shader sources
+game.toml     game content and weapon definitions
+settings.toml local graphics, controls, and map settings
+```
+
+---
+
+<p align="center"><sub>illoprin 2026. Coded on Rust with 🩷</sub></p>

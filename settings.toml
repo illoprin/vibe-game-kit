@@ -20,7 +20,7 @@ bloom_radius = 1.350000023841858
 bloom_saturation = 1.2000000476837158
 lens_dirt_enabled = true
 lens_dirt_intensity = 1.25
-render_scale = 1.0
+render_scale = 0.800000011920929
 
 [controls]
 mouse_sensitivity = 0.8999999761581421

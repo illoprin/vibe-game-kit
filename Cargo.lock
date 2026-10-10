@@ -2297,6 +2297,15 @@ dependencies = [
 
 [[package]]
 name = "toml"
+version = "0.5.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f4f7f0dd8d50a853a531c426359045b1998f04219d88799810762cd4ad314234"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "toml"
 version = "0.8.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc1beb996b9d83529a9e75c17a1686767d148d70663143c7854d8b4a09ced362"
@@ -2445,6 +2454,26 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "vibe-game-kit"
+version = "0.0.1"
+dependencies = [
+ "bytemuck",
+ "egui",
+ "egui-wgpu",
+ "egui-winit",
+ "glam",
+ "image",
+ "naga",
+ "pollster",
+ "serde",
+ "serde_json",
+ "toml 0.8.23",
+ "wgpu",
+ "winit",
+ "winres",
+]
 
 [[package]]
 name = "walkdir"
@@ -2690,25 +2719,6 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "url",
  "web-sys",
-]
-
-[[package]]
-name = "webgpu-cube"
-version = "0.1.0"
-dependencies = [
- "bytemuck",
- "egui",
- "egui-wgpu",
- "egui-winit",
- "glam",
- "image",
- "naga",
- "pollster",
- "serde",
- "serde_json",
- "toml",
- "wgpu",
- "winit",
 ]
 
 [[package]]
@@ -3064,6 +3074,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23b97319f7b8343df12cc98938e5c3eb436064524c8d2b4e30a1d3a36eecdf81"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "winres"
+version = "0.1.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b68db261ef59e9e52806f688020631e987592bd83619edccda9c47d42cde4f6c"
+dependencies = [
+ "toml 0.5.11",
 ]
 
 [[package]]
