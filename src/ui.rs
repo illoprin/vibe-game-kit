@@ -23,6 +23,8 @@ pub struct DebugInfo<'a> {
     pub frametime_ms: f32,
     pub vertices: u32,
     pub draw_calls: u32,
+    pub camera_position: [f32; 3],
+    pub view_direction: [f32; 3],
     pub frametimes_seconds: &'a [f32],
 }
 
@@ -204,6 +206,16 @@ fn debug_panel(ctx: &Context, debug: &DebugInfo<'_>) {
                     ui.label(format!(
                         "Vertices: {}  |  Draw Calls: {}",
                         debug.vertices, debug.draw_calls
+                    ));
+                    ui.label(format!(
+                        "Position: ({:.2}, {:.2}, {:.2})",
+                        debug.camera_position[0],
+                        debug.camera_position[1],
+                        debug.camera_position[2]
+                    ));
+                    ui.label(format!(
+                        "View direction: ({:.3}, {:.3}, {:.3})",
+                        debug.view_direction[0], debug.view_direction[1], debug.view_direction[2]
                     ));
                     ui.add_space(4.0);
                     frametime_chart(ui, debug.frametimes_seconds);
@@ -456,15 +468,23 @@ fn panel_frame() -> egui::Frame {
 fn stat_panel(ui: &mut egui::Ui, label: &str, value: u32) {
     panel_frame().show(ui, |ui| {
         ui.vertical(|ui| {
-            ui.label(
-                egui::RichText::new(label)
-                    .font(secondary_font(9.0))
-                    .color(HUD_LABEL),
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(label)
+                        .font(secondary_font(9.0))
+                        .color(HUD_LABEL),
+                )
+                .wrap_mode(egui::TextWrapMode::Extend)
+                .halign(egui::Align::RIGHT),
             );
-            ui.label(
-                egui::RichText::new(value.to_string())
-                    .font(pixel_font(30.0))
-                    .color(HUD_YELLOW),
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(value.to_string())
+                        .font(pixel_font(30.0))
+                        .color(HUD_YELLOW),
+                )
+                .wrap_mode(egui::TextWrapMode::Extend)
+                .halign(egui::Align::RIGHT),
             );
         });
     });
@@ -477,10 +497,14 @@ fn game_hud(ctx: &Context, hud: &HudInfo<'_>, crosshair: Option<&egui::TextureHa
         .anchor(Align2::RIGHT_TOP, egui::vec2(-24.0, 20.0))
         .interactable(false)
         .show(ctx, |ui| {
-            ui.label(
-                egui::RichText::new(hud.weapon)
-                    .font(secondary_font(16.0))
-                    .color(HUD_YELLOW),
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(hud.weapon)
+                        .font(secondary_font(16.0))
+                        .color(HUD_YELLOW),
+                )
+                .wrap_mode(egui::TextWrapMode::Extend)
+                .halign(egui::Align::RIGHT),
             );
         });
 
@@ -509,18 +533,26 @@ fn game_hud(ctx: &Context, hud: &HudInfo<'_>, crosshair: Option<&egui::TextureHa
                     - ui.fonts(|fonts| fonts.row_height(&small)))
                 .max(0.0);
                 ui.horizontal(|ui| {
-                    ui.label(
-                        egui::RichText::new(hud.ammo.to_string())
-                            .font(large)
-                            .color(HUD_YELLOW),
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(hud.ammo.to_string())
+                                .font(large)
+                                .color(HUD_YELLOW),
+                        )
+                        .wrap_mode(egui::TextWrapMode::Extend)
+                        .halign(egui::Align::RIGHT),
                     );
                     ui.add_space(9.0);
                     ui.vertical(|ui| {
                         ui.add_space(baseline_shift);
-                        ui.label(
-                            egui::RichText::new(hud.ammo_max.to_string())
-                                .font(small)
-                                .color(HUD_SECONDARY),
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(hud.ammo_max.to_string())
+                                    .font(small)
+                                    .color(HUD_SECONDARY),
+                            )
+                            .wrap_mode(egui::TextWrapMode::Extend)
+                            .halign(egui::Align::RIGHT),
                         );
                     });
                 });

@@ -778,6 +778,8 @@ impl Renderer {
             frametime_ms: dt * 1000.0,
             vertices: self.frame_vertex_count,
             draw_calls: self.frame_draw_calls,
+            camera_position: camera.position.to_array(),
+            view_direction: camera.forward().to_array(),
             frametimes_seconds: &history,
         };
         let hud = HudInfo {
