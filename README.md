@@ -9,9 +9,10 @@
   A configurable, blocky FPS sandbox and rendering playground built with Rust, wgpu, and egui.
 </p>
 
-<p align="center">
+<!-- <p align="center">
   <a href="README.md">English</a> &nbsp;·&nbsp; <a href="README.ru.md">Русский</a>
 </p>
+ -->
 
 <p align="center">
   <img src="https://img.shields.io/badge/Rust-2021-CE422B?style=flat-square&logo=rust&logoColor=white" alt="Rust 2021">

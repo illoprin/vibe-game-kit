@@ -18,7 +18,7 @@ amount = 60
 max = 240
 
 [weapons.carbine.recoil]
-pitch_kick = 2.5
+pitch_kick = 5.5
 yaw_kick_min = -0.5
 yaw_kick_max = 0.5
 visual_kickback = 0.15

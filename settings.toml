@@ -3,7 +3,7 @@ map_path = "assets/map/map1.map"
 [graphics]
 shadow_resolution = 512
 shadow_filter = "vsm"
-ssao_enabled = true
+ssao_enabled = false
 ssao_strength = 4.0
 ssao_radius = 1.0499999523162842
 vignette_strength = 0.800000011920929

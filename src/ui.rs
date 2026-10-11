@@ -241,7 +241,7 @@ fn frametime_chart(ui: &mut egui::Ui, frametimes: &[f32]) {
             - (frametimes[index + 1] * 1000.0 / max_ms).clamp(0.0, 1.0) * graph.height();
         painter.line_segment(
             [egui::pos2(x0, y0), egui::pos2(x1, y1)],
-            egui::Stroke::new(1.5, egui::Color32::from_rgb(88, 210, 150)),
+            egui::Stroke::new(1.5_f32, egui::Color32::from_rgb(88, 210, 150)),
         );
     }
 }
